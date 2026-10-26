@@ -1,0 +1,14 @@
+name: truco_core
+description: Motor de reglas y lógica pura para el juego de Truco Uruguayo (Single Source of Truth).
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  meta: ^1.9.0
+
+dev_dependencies:
+  test: ^1.24.0
+  lints: ^3.0.0

@@ -1,0 +1,431 @@
+================================================================================
+ESPECIFICACIÓN DE REQUERIMIENTOS DE SOFTWARE (SRS)
+PROYECTO: APLICACIÓN MÓVIL DE TRUCO URUGUAYO
+Versión: 0.2.0 (Especificación Integral Consolidada)
+Fecha: 26 de Octubre de 2026
+Estado: Especificación Definitiva de Arquitectura y Reglas de Juego
+================================================================================
+
+1. INTRODUCCIÓN Y VISIÓN DEL PROYECTO
+--------------------------------------------------------------------------------
+1.1 Propósito y Alcance
+El presente documento define formalmente los objetivos, el marco reglamentario 
+oficial del Truco Uruguayo, los Requerimientos Funcionales (RF) priorizados bajo 
+el estándar MoSCoW con criterios de aceptación completos, los Requerimientos No 
+Funcionales (RNF), la matriz de riesgos con mitigación y la suite de pruebas del 
+motor de reglas para la plataforma móvil multiplataforma (iOS y Android).
+
+1.2 Glosario Terminológico Oficial
+- Muestra: Carta destapada del mazo al iniciar cada mano que determina el palo 
+  regente y consagra a las cinco "Piezas".
+- Piezas: Las 5 cartas de máxima jerarquía del juego pertenecientes al palo de 
+  la muestra: 2, 4, 5, 11 (Caballo / Perico) y 10 (Sota / Perica).
+- Carta Sustituta: Si la carta descubierta como Muestra resulta ser cualquiera 
+  de las 5 piezas (2, 4, 5, 11 o 10), el Rey (12) del palo de la muestra asume 
+  exactamente el valor, jerarquía y puntaje de la pieza que salió descubierta.
+- Perico: Caballo (11) del palo de la muestra (o el Rey 12 si la muestra fue 11).
+- Perica: Sota (10) del palo de la muestra (o el Rey 12 si la muestra fue 10).
+- Matas Comunes: Cartas de alta jerarquía independientes de la muestra:
+  1 de Espada (Macho), 1 de Basto (Hembra), 7 de Espada y 7 de Oro.
+- Parda: Empate de cartas en una ronda entre dos o más bandos opuestos.
+- Jugador Mano: Jugador ubicado a la derecha del dador, quien inicia la primera 
+  ronda y tiene prioridad reglamentaria en desempates.
+- Jugador Pie: Último jugador de la mano (el dador o su compañero).
+- Malas y Buenas: En partidas a 30 puntos, los primeros 15 puntos constituyen 
+  "las malas" y los puntos del 16 al 30 son "las buenas" (en 40 puntos: 20 y 20).
+- Seña: Gesto visual codificado entre compañeros de equipo para transmitir las 
+  cartas en mano sin ser reveladas a los rivales.
+- Irse al mazo: Rendición voluntaria del equipo en la mano activa, concediendo 
+  los puntos en disputa al rival.
+- Preclusión: Pérdida irrevocable del derecho a cantar Envido o Flor si se juega 
+  la carta en primera ronda sin haber cantado previamente.
+
+
+2. OBJETIVOS DEL PROYECTO
+--------------------------------------------------------------------------------
+2.1 Objetivos de Negocio y Producto (OBN):
+- OBN-01: Establecer la plataforma móvil líder y referente para jugar al Truco 
+  Uruguayo con fidelidad folclórica, diseño moderno e interacción fluida.
+- OBN-02: Dinamizar la comunidad competitiva mediante matchmaking por habilidad 
+  (ELO), tablas de clasificación mensuales, temporadas y torneos organizados.
+- OBN-03: Proporcionar un canal de aprendizaje interactivo ("Modo Escuela") 
+  que instruya a principiantes en la muestra, jerarquías, cantos y señas.
+- OBN-04: Cumplir estrictamente las normativas de las tiendas (Apple App Store 
+  Review Guidelines y Google Play Policy) en materia de privacidad, eliminación 
+  de cuenta, moderación de usuarios y ausencia de simulación de juegos de azar.
+
+2.2 Objetivos Técnicos (OBT):
+- OBT-01: Integridad total con Servidor Autoritativo y barajado mediante CSPRNG 
+  (generador pseudoaleatorio criptográficamente seguro) con hash auditable.
+- OBT-02: Garantizar una latencia de procesamiento en servidor <= 30 ms y un 
+  Round-Trip Time (RTT) objetivo <= 120 ms sobre redes 4G/Wi-Fi en el cono sur, 
+  alojando los servidores de juego en la región de São Paulo (AWS sa-east-1 o 
+  GCP southamerica-east1).
+- OBT-03: Implementar un Motor de Reglas Único y Compartido (Single Source of Truth) 
+  escrito en Dart puro (`truco_core`), reutilizado directamente tanto en el 
+  cliente Flutter (partidas offline) como en el backend Dart/Servicio de Juego, 
+  eliminando duplicación de código e inconsistencias de reglas.
+- OBT-04: Disponibilidad del servicio del 99.9% mediante arquitectura de servidor 
+  modular con WebSockets, caché en Redis y persistencia relacional en PostgreSQL.
+
+
+3. REQUERIMIENTOS FUNCIONALES (RF) - CON PRIORIZACIÓN MOSCOW
+--------------------------------------------------------------------------------
+
+3.1 GESTIÓN DE USUARIOS, ACCESO Y MODERACIÓN
+- RF-01 [M] - Autenticación Multicanal y Modo Invitado
+  * Descripción: Inicio de sesión con Apple Sign-In, Google Sign-In, Correo/Password 
+    o Modo Invitado anónimo.
+  * Criterios de Aceptación:
+    - El usuario invitado puede jugar partidas casuales y offline inmediatamente.
+    - Se permite vincular la cuenta de invitado a Google o Apple conservando monedas 
+      y cosméticos acumulados.
+    - Para ingresar a torneos o ligas clasificatorias se exige cuenta registrada.
+- RF-02 [M] - Perfil y Estadísticas Diferenciadas
+  * Descripción: Pantalla de perfil con avatar, alias, partidas jugadas, victorias, 
+    derrotas, ratio de abandono y puntos ELO.
+  * Criterios de Aceptación:
+    - Las partidas offline vs IA o con bots de relleno quedan estrictamente excluidas 
+      de las estadísticas competitivas y del cómputo de ELO.
+    - El perfil muestra estadísticas separadas para 1v1, 2v2 y 3v3.
+- RF-03 [M] - Eliminación de Cuenta ("Account Deletion")
+  * Descripción: Opción visible en ajustes para solicitar la eliminación de la 
+    cuenta y borrado de datos personales.
+  * Criterios de Aceptación:
+    - Confirmación en dos pasos mediante diálogo modal de advertencia.
+    - Revocación inmediata de tokens y anonimización de registros conforme al RGPD 
+      y la Ley Uruguaya N° 18.331.
+- RF-04 [M] - Moderación, Reporte y Bloqueo de Jugadores
+  * Descripción: Funcionalidad obligatoria para reportar conducta antideportiva o 
+    lenguaje ofensivo, y silenciar o bloquear rivales.
+  * Criterios de Aceptación:
+    - Un jugador bloqueado no puede unirse a salas privadas creadas por el bloqueador 
+      ni enviarle solicitudes ni emitirle frases/reacciones sonoras.
+    - Los reportes quedan almacenados con snapshot de la partida para auditoría.
+
+3.2 REGLAS OFICIALES Y MOTOR DE JUEGO (TRUCO URUGUAYO)
+- RF-05 [M] - Mazo, Muestra y Carta Sustituta
+  * Descripción: Mazo español de 40 cartas. Se extraen 3 cartas para cada jugador 
+    y se destapa una carta como Muestra.
+  * Jerarquía de Piezas del palo de la muestra:
+    1º) 2 de la muestra (Pieza Máxima)
+    2º) 4 de la muestra
+    3º) 5 de la muestra
+    4º) 11 de la muestra (Perico)
+    5º) 10 de la muestra (Perica)
+  * Regla Universal de Carta Sustituta:
+    Si la muestra descubierta es cualquiera de las 5 piezas (2, 4, 5, 11 o 10), 
+    el Rey (12) del palo de la muestra sustituye a la pieza ausente, heredando 
+    exactamente su valor de jerarquía en las rondas y su puntaje en Flor/Envido 
+    (si la muestra es 2, el 12 vale 30; si es 4 vale 29; si es 5 vale 28; si es 11 o 10 vale 27).
+  * Jerarquía de Matas y Cartas Restantes:
+    1 de Espada (Macho) > 1 de Basto (Hembra) > 7 de Espada > 7 de Oro > 
+    Treses > Doses comunes > Unos comunes (Copa y Oro) > Reyes (12) > 
+    Caballos comunes (11) > Sotas comunes (10) > Sietes comunes (Copa y Basto) > 
+    Seises > Cincos comunes > Cuatros comunes.
+  * Criterios de Aceptación:
+    - Al inicio de cada mano el servidor genera el mazo con CSPRNG y verifica si 
+      la muestra es una pieza para asignar el rol de sustituto al Rey 12.
+- RF-06 [M] - Rondas, Pardas y Apertura de Turnos
+  * Descripción: Cada mano comprende hasta 3 rondas. Gana la mano quien obtenga 
+    2 de las 3 rondas o resuelva el desempate por pardas.
+  * Reglas Oficiales de Parda:
+    - Parda en 1ª ronda: Se define en la 2ª ronda (quien gane la 2ª gana la mano).
+      Si la 2ª también es parda, se define en la 3ª.
+      Si la 3ª también es parda (empate en las 3 rondas), gana el jugador MANO.
+    - Parda en 2ª ronda (con 1ª ganada): Gana la mano quien ganó la 1ª ronda.
+    - Parda en 3ª ronda (habiendo ganado una cada uno): Gana quien ganó la 1ª ronda.
+  * Turno de apertura tras una parda:
+    - En caso de parda, la siguiente ronda la inicia el jugador que arrojó la 
+      primera carta en la ronda que acaba de empatar.
+  * Criterios de Aceptación:
+    - El motor evalúa automáticamente las condiciones P1 a P6 de la matriz de pruebas.
+- RF-07 [M] - Sistema y Precedencia de la Flor
+  * Descripción: Se canta en 1ª ronda antes de que el jugador juegue su carta.
+    La Flor tiene PRECEDENCIA ABSOLUTA sobre el Envido: si alguien cantó Envido 
+    y otro jugador canta Flor, el Envido queda anulado y sin valor de puntos.
+  * Combinaciones Válidas de Flor:
+    1) 3 cartas del mismo palo (sin piezas).
+    2) 1 pieza de la muestra + 2 cartas del mismo palo entre sí (de cualquier palo).
+    3) 2 piezas de la muestra + 1 carta cualquiera.
+    4) 3 piezas de la muestra.
+  * Valores Numéricos para Cómputo de Flor:
+    - 2 de la muestra = 30 puntos.
+    - 4 de la muestra = 29 puntos.
+    - 5 de la muestra = 28 puntos.
+    - 11 (Perico) / 10 (Perica) o 12 (Rey sustituto) = el valor de la pieza sustituida.
+    - Cartas comunes (1 al 7) suman su valor facial. Figuras (10, 11, 12 comunes) = 0.
+    - Combinación 1 (3 del mismo palo sin piezas): Suma facial + 20 puntos base.
+    - Combinaciones con piezas: Suma directa de los valores de las piezas y cartas.
+  * Cantos de Flor y Puntuación:
+    - "Flor": 3 puntos otorgados al equipo si nadie más tiene flor.
+    - Si dos bandos tienen Flor: Pueden responder "Contraflor", "Con Flor me achico" 
+      o "Contraflor al Resto".
+    - Contraflor querida: Se comparan los puntos al final de la mano; quien tenga 
+      mayor puntaje se lleva 6 puntos. En caso de empate en puntos, gana el MANO.
+    - "Con Flor me achico": Otorga 4 puntos al bando que cantó Contraflor.
+    - Contraflor al Resto querida: Otorga los puntos que le faltan al equipo que 
+      va ganando (en las malas para llegar a 15, o en las buenas para llegar a 30).
+- RF-08 [M] - Sistema de Envido
+  * Descripción: Se disputa en 1ª ronda antes de jugar la carta y únicamente si 
+    ningún jugador de la mesa posee Flor.
+  * Enlace y Cálculo de Puntos de Envido:
+    - Una pieza del palo de la muestra liga con CUALQUIER carta de la mano (sin 
+      importar su palo): suma el valor de la pieza (30, 29, 28 o 27) + el valor 
+      facial de la carta más alta que la acompañe (figuras suman 0).
+    - Dos piezas de la muestra: suman sus respectivos valores entre sí (ej. 2 + 4 = 59).
+    - Sin piezas: Se ligan dos cartas del mismo palo (suma facial + 20).
+    - Sin piezas ni cartas del mismo palo: El valor del envido es la carta más alta 
+      de la mano (del 1 al 7; figuras valen 0).
+  * Cantos y Escala de Envido:
+    - Cantos: "Envido" (2 pts), "Envido-Envido" (4 pts), "Real Envido" (3 pts directos 
+      o +3 sobre envite anterior), "Falta Envido".
+    - "No Quiero" en Envido: Otorga 1 punto si fue canto inicial, o la suma de los 
+      puntos acumulados antes del último revire.
+    - Falta Envido:
+      * Si ambos están en las malas: Otorga lo que le falta al puntero para 15.
+      * Si al menos uno está en las buenas: Otorga lo que le falta al puntero para 30.
+      * Si se responde "No Quiero" a Falta Envido: Concede 1 punto (o los puntos 
+        consolidados previos si venía precedida de Envido/Real Envido).
+  * Desempate en Envido: En igualdad de puntos, gana el jugador MANO (o más 
+    cercano a la mano en el orden de giro).
+- RF-09 [M] - Sistema de Truco
+  * Descripción: Disputa por las cartas de la mano.
+  * Cantos: "Truco" (2 pts), "Retruco" (3 pts), "Vale Cuatro" (4 pts).
+  * Respuestas: "Quiero", "No Quiero" o revirar la apuesta al siguiente nivel.
+  * Puntos al decir "No Quiero":
+    - Al Truco: 1 punto para el retador.
+    - Al Retruco: 2 puntos para el retador.
+    - Al Vale Cuatro: 3 puntos para el retador.
+  * Prioridad "El Envido está Primero": Si se canta Truco en 1ª ronda antes de 
+    haberse jugado el envido, el rival puede decir "El envido está primero" 
+    (o cantar Envido/Flor). Se disputa primero el envido/flor y luego se reanuda 
+    la respuesta pendiente al Truco.
+- RF-10 [M] - Rendición ("Irse al Mazo")
+  * Descripción: En cualquier momento de su turno, un jugador o equipo puede 
+    elegir irse al mazo.
+  * Criterios de Aceptación:
+    - La decisión de un integrante de equipo compromete a todo el bando.
+    - El rival se adjudica inmediatamente los puntos en juego hasta ese momento.
+- RF-11 [M] - Marcador Tradicional Uruguayo
+  * Descripción: Visualización digital del tanteador por fósforos/rayas.
+  * Criterios de Aceptación:
+    - Modo estándar a 30 puntos (15 malas y 15 buenas).
+    - Opción en configuración de mesa para jugar a 40 puntos (20 malas y 20 buenas).
+
+3.3 MODALIDADES, SOCIAL Y GAMIFICACIÓN
+- RF-12 [M] - Multijugador 1 vs 1 en Tiempo Real
+  * Criterios de Aceptación:
+    - Emparejamiento aleatorio por ELO con latencia RTT objetivo <= 120 ms.
+    - Salas privadas creadas mediante código alfanumérico para invitar amigos.
+- RF-13 [S] - Multijugador en Parejas (2v2) y Tríos (3v3)
+  * Criterios de Aceptación:
+    - En 2v2 disposición en mesa cruzada alternada (A1, B1, A2, B2).
+    - En 3v3 soporte para modalidad "Pica-Pica" (manos alternadas de duelo 1v1 y 3v3).
+    - En respuestas de equipo, si un jugador dice "Quiero" y el otro "No Quiero", 
+      prevalece obligatoriamente el "Quiero".
+- RF-14 [S] - Sistema de Señas Faciales Digitales
+  * Descripción: Selector táctil contextual de señas tradicionales uruguayas:
+    - 2 de la muestra: Levantar ambas cejas.
+    - 4 de la muestra: Guiñar un ojo.
+    - 5 de la muestra: Torcer la boca hacia un lado.
+    - Perico (11) / Perica (10): Guiñar ojo opuesto / tocarse la barbilla.
+    - Macho (1 Espada): Guiño derecho. Hembra (1 Basto): Guiño izquierdo.
+    - Cartas malas / ciegas: Cerrar ambos ojos brevemente.
+  * Criterios de Aceptación:
+    - La animación de la seña es visible ÚNICAMENTE en la pantalla del compañero.
+    - Deshabilitada en partidas 1v1. Cooldown de 3 segundos contra spam.
+- RF-15 [M] - Modo Offline vs Inteligencia Artificial
+  * Descripción: Partida individual local con tres niveles de dificultad:
+    Fácil (heurística básica), Medio (cálculo de probabilidades de muestra) y 
+    Difícil (farol y retención de piezas estratégicas).
+  * Criterios de Aceptación:
+    - Funciona 100% sin conexión a internet ejecutando el motor `truco_core` en local.
+- RF-16 [M] - Configuración Personalizada de Mesas
+  * Descripción: El anfitrión puede parametrizar: límite de puntos (30 o 40), 
+    juego con Flor u opcional sin Flor, tiempo de turno (15 s, 30 s o 60 s).
+- RF-17 [M] - Fallback a Bots en Matchmaking
+  * Descripción: Si la cola de emparejamiento excede 45 segundos sin encontrar 
+    oponente humano, se ofrece completar la mesa con bots para no bloquear al usuario.
+  * Criterios de Aceptación:
+    - Las partidas con bots de relleno no alteran el puntaje de ranking ELO.
+- RF-18 [S] - Modo Escuela / Tutorial Interactivo
+  * Descripción: Módulos interactivos guiados con ejercicios prácticos sobre: 
+    la muestra, piezas y sustituto, cálculo de envido, flor y señas.
+- RF-19 [S] - Torneos y Ligas por Temporadas
+  * Descripción: Temporadas mensuales de clasificación ELO y torneos bracket de 
+    eliminación directa con recompensas cosméticas.
+- RF-20 [S] - Frases Típicas con Audio Folclórico y Chat Seguro
+  * Descripción: Botones de audio con locuciones típicas ("¡Quiero retruco!", 
+    "¡Falta envido y truco!") y chat de texto predefinido (evita toxicidad).
+- RF-21 [S] - Historial Detallado de Partidas
+  * Descripción: Registro de las últimas 20 partidas con desglose mano por mano 
+    de cartas, cantos y puntos obtenidos.
+- RF-22 [S] - Amigos y Notificaciones Push
+  * Descripción: Lista de contactos con estado de conexión y notificaciones push 
+    (FCM/APNs) para invitar a partidas o avisar turnos en mesas privadas.
+- RF-23 [M] - Economía Virtual Ética (Sin Simulación de Juegos de Azar)
+  * Descripción: Fichas virtuales exclusivamente para desbloqueo cosmético 
+    (tapetes, reversos, avatares) y entrada a torneos internos.
+  * Criterios de Aceptación:
+    - No existe ningún mecanismo de retiro, canje o premio en dinero real ni bienes.
+    - Cumple los requerimientos de Google Play y Apple Store para declarar 
+      formalmente la ausencia de simulación de apuestas ("no gambling").
+- RF-24 [S] - Internacionalización y Localización (i18n)
+  * Descripción: Soporte multi-idioma seleccionable: Español Rioplatense (por defecto), 
+    Inglés y Portugués.
+
+
+4. REQUERIMIENTOS NO FUNCIONALES (RNF)
+--------------------------------------------------------------------------------
+
+4.1 SEGURIDAD, INTEGRIDAD Y ANTI-FRAUDE (RNF-SEG)
+- RNF-SEG-01 (Arquitectura Autoritativa Zero-Trust): El estado del mazo se genera y 
+  custodia en el servidor. El cliente sólo recibe los datos de sus propias 3 cartas 
+  y de la Muestra destapada.
+- RNF-SEG-02 (Barajado Criptográfico CSPRNG y Auditoría): Uso de generadores 
+  criptográficos seguros. Al inicio de cada mano se genera y almacena un hash 
+  SHA-256 de la semilla del mazo para auditoría posterior contra trampas.
+- RNF-SEG-03 (Seguridad en Tránsito): TLS 1.2 como piso mínimo innegociable y 
+  TLS 1.3 preferido en todos los canales HTTPS y WebSockets (WSS).
+- RNF-SEG-04 (Almacenamiento de Credenciales en Dispositivo):
+  * iOS: Keychain de Apple.
+  * Android: Android Keystore con cifrado respaldado por hardware TEE, y 
+    StrongBox Keymaster cuando esté disponible en el dispositivo (Android 9+).
+- RNF-SEG-05 (Anti-Colusión y Detección de Clientes Modificados):
+  * Comprobación de integridad del binario (Play Integrity API en Android / 
+    DeviceCheck en iOS).
+  * Monitoreo analítico del servidor para detectar patrones anormales de colusión 
+    en partidas por parejas en salas públicas clasificatorias.
+- RNF-SEG-06 (Privacidad y RGPD): Cumplimiento de la Ley Uruguaya N° 18.331 y RGPD.
+
+4.2 RENDIMIENTO Y EFICIENCIA (RNF-REN)
+- RNF-REN-01 (Métricas de Latencia y Servidores Regionales):
+  * Tiempo de cómputo en servidor por jugada: Objetivo <= 30 ms.
+  * Latencia de Red Round-Trip (RTT): Objetivo <= 120 ms sobre redes móviles 4G/Wi-Fi.
+  * Servidores de juego alojados en São Paulo (AWS sa-east-1 o GCP southamerica-east1) 
+    para optimizar la conexión con el cono sur.
+- RNF-REN-02 (Tasa de Cuadros): Interfaz renderizada a 60 FPS estables.
+- RNF-REN-03 (Consumo Energético y Recursos): Consumo de CPU promedio objetivo 
+  <= 12% en dispositivos móviles de referencia. Tamaño de descarga inicial < 45 MB.
+
+4.3 DISPONIBILIDAD, TOLERANCIA A FALLOS Y TIMEOUTS (RNF-DIS)
+- RNF-DIS-01 (Disponibilidad 99.9% y Heartbeats): Monitoreo de presencia mediante 
+  heartbeats ligeros (ping/pong cada 5 segundos) a través de WebSocket.
+- RNF-DIS-02 (Ventana de Gracia de Reconexión):
+  * Ante pérdida de conexión se otorga una ventana de gracia de 45 segundos.
+  * El temporizador de turno regular se congela para ese jugador durante la ventana.
+  * Al reconectar, el servidor despacha un snapshot íntegro del estado de la mesa.
+- RNF-DIS-03 (Comportamiento Ante Expiración de Tiempo / Timeout):
+  * Turno de tirar carta: El sistema arroja la carta de menor valor de su mano.
+  * Turno de responder canto: El sistema responde automáticamente "No Quiero".
+  * Expiración de la ventana de reconexión (45 s): Sustitución por bot o 
+    declaración de abandono de mano.
+
+4.4 ARQUITECTURA, TECNOLOGÍA Y ADAPTABILIDAD (RNF-ADA)
+- RNF-ADA-01 (Motor de Reglas Unificado - Single Source of Truth):
+  * El núcleo del motor de juego se implementa en Dart puro (`truco_core`), 
+    completamente aislado de la interfaz visual.
+  * Este mismo paquete se ejecuta en el cliente Flutter (partidas offline) y en el 
+    servicio backend en Dart, garantizando idéntica ejecución de reglas.
+- RNF-ADA-02 (Arquitectura en Fases de Backend):
+  * Fase 1 (MVP): Monolito Modular en Dart/Node con WebSockets nativos (RFC 6455), 
+    Redis para gestión de salas volátiles y PostgreSQL para persistencia.
+  * Fase 2 (Escalabilidad): Despliegue en contenedores orquestados con Kubernetes 
+    cuando la concurrencia supere los 2.000 usuarios simultáneos.
+- RNF-ADA-03 (Ergonomía, Accesibilidad y Háptica):
+  * Diseño adaptable para juego cómodo con una sola mano en pantallas verticales 
+    (16:9 a 20:9, notch, tablets).
+  * Feedback háptico configurable en lanzamientos de cartas y cantos.
+  * Modo daltónico de alto contraste y compatibilidad con lectores de pantalla 
+    (TalkBack y VoiceOver).
+
+
+5. MATRIZ DE CASOS DE PRUEBA DEL MOTOR DE REGLAS
+--------------------------------------------------------------------------------
+
+5.1 CASOS DE PRUEBA: JERARQUÍA Y CARTA SUSTITUTA (RF-05)
++----+----------------------+--------------------+--------------------+----------------------------+
+| ID | Muestra Descubierta  | Carta Evaluada     | Rol Asignado       | Valor / Prioridad Esperada |
++----+----------------------+--------------------+--------------------+----------------------------+
+| J1 | 7 de Espada          | 2 de Espada        | Pieza Máxima       | 1ª carta más alta del juego|
+| J2 | 7 de Espada          | 4 de Espada        | 2ª Pieza           | 2ª carta más alta del juego|
+| J3 | 7 de Espada          | 5 de Espada        | 3ª Pieza           | 3ª carta más alta del juego|
+| J4 | 7 de Espada          | 11 de Espada       | Perico             | 4ª carta más alta del juego|
+| J5 | 7 de Espada          | 10 de Espada       | Perica             | 5ª carta más alta del juego|
+| J6 | 7 de Espada          | 1 de Espada        | Macho (Mata común) | 6ª carta más alta del juego|
+| J7 | 2 de Oro (Pieza)     | 12 de Oro (Rey)    | Sustituto del 2    | Asume valor de Pieza Máx(30|
+| J8 | 4 de Basto (Pieza)   | 12 de Basto (Rey)  | Sustituto del 4    | Asume valor del 4 (29 pts) |
+| J9 | 5 de Copa (Pieza)    | 12 de Copa (Rey)   | Sustituto del 5    | Asume valor del 5 (28 pts) |
+| J10| 11 de Basto (Pieza)  | 12 de Basto (Rey)  | Sustituto Perico   | Asume valor de 11 (27 pts) |
+| J11| 10 de Copa (Pieza)   | 12 de Copa (Rey)   | Sustituto Perica   | Asume valor de 10 (27 pts) |
++----+----------------------+--------------------+--------------------+----------------------------+
+
+5.2 CASOS DE PRUEBA: RESOLUCIÓN DE RONDAS Y PARDAS (RF-06)
++----+------------+------------+------------+------------------------------------------------------+
+| ID | 1ª Ronda   | 2ª Ronda   | 3ª Ronda   | Veredicto de la Mano                                 |
++----+------------+------------+------------+------------------------------------------------------+
+| P1 | Bando A    | Bando B    | Bando A    | Gana Bando A (2 a 1)                                 |
+| P2 | Parda      | Bando A    | -          | Gana Bando A (define 2ª ronda tras parda en 1ª)      |
+| P3 | Parda      | Parda      | Bando B    | Gana Bando B (define 3ª ronda tras 2 pardas)         |
+| P4 | Parda      | Parda      | Parda      | Gana el jugador MANO (3 pardas consecutivas)         |
+| P5 | Bando A    | Parda      | -          | Gana Bando A (ganó la 1ª y la 2ª fue parda)          |
+| P6 | Bando B    | Bando A    | Parda      | Gana Bando B (ganó la 1ª y la 3ª fue parda)          |
++----+------------+------------+------------+------------------------------------------------------+
+
+5.3 CASOS DE PRUEBA: FLOR Y PRECEDENCIA (RF-07)
++----+-------------------+-------------------------------+----------------------+--------------------+
+| ID | Muestra           | Cartas en Mano                | Tipo de Combinación  | Puntos Calculados  |
++----+-------------------+-------------------------------+----------------------+--------------------+
+| F1 | 3 de Basto        | 2, 6, 7 de Oro                | 3 del mismo palo     | 2+6+7+20 = 35 pts  |
+| F2 | 3 de Basto        | 10, 11, 7 de Copa             | Figuras mismo palo   | 0+0+7+20 = 27 pts  |
+| F3 | 1 de Basto        | 2 Basto (Pieza) + 4, 7 Espada | 1 Pieza + 2 común // | 30 + 4 + 7 = 41 pts|
+| F4 | 1 de Basto        | 2 Basto + 4 Basto + 1 Oro     | 2 Piezas + 1 común   | 30 + 29 + 1 = 60 pts|
+| F5 | 1 de Basto        | 2 Basto + 4 Basto + 5 Basto   | 3 Piezas             | 30+29+28 = 87 pts  |
+| F6 | 7 de Espada       | Jugador A canta Envido; B Flor| Precedencia de Flor  | Envido ANULADO (0) |
+| F7 | 3 de Basto        | A: 33 pts Flor; B: 33 pts Flor| Empate de puntos Flor| Gana jugador MANO  |
++----+-------------------+-------------------------------+----------------------+--------------------+
+
+5.4 CASOS DE PRUEBA: ENVIDO Y ENCADENAMIENTO (RF-08 y RF-09)
++----+-------------------+-------------------------------+----------------------+--------------------+
+| ID | Muestra           | Cartas / Situación            | Canto / Respuesta    | Puntos Obtenidos   |
++----+-------------------+-------------------------------+----------------------+--------------------+
+| E1 | 7 de Espada       | 1 Copa, 5 Copa, 3 Basto       | Envido sin pieza     | 1 + 5 + 20 = 26 pts|
+| E2 | 1 de Basto        | 4 Basto (Pieza) + 6 Basto     | Pieza + carta palo   | 29 + 6 = 35 pts    |
+| E3 | 1 de Basto        | 2 Basto (Pieza) + 3 Copa      | Pieza + carta ajena  | 30 + 3 = 33 pts    |
+| E4 | 2 de Basto        | 12 Basto (Sustituto) + 7 Oro  | Sustituto 2 + carta  | 30 + 7 = 37 pts    |
+| E5 | 7 de Espada       | 1 Copa, 12 Oro, 3 Basto       | Sin pares ni piezas  | Carta más alta = 3 |
+| E6 | Cualquier muestra | A canta Envido; B dice No Q.  | Envido -> No Quiero  | 1 punto para A     |
+| E7 | Cualquier muestra | A: Envido -> B: Real -> No Q. | Revire -> No Quiero  | 2 puntos para B    |
+| E8 | Marcador 10-12    | Falta Envido querida          | En las malas         | Puntos para 15 (3) |
+| E9 | Marcador 18-22    | Falta Envido querida          | En las buenas        | Puntos para 30 (8) |
++----+-------------------+-------------------------------+----------------------+--------------------+
+
+5.5 CASOS DE PRUEBA: CADENA DE TRUCO (RF-09)
++----+-------------------------------+-----------------------------+-------------------------------+
+| ID | Secuencia de Cantos           | Respuesta Final             | Puntos Adjudicados            |
++----+-------------------------------+-----------------------------+-------------------------------+
+| T1 | Truco                         | Quiero                      | 2 puntos para el ganador mano |
+| T2 | Truco                         | No Quiero                   | 1 punto para el retador       |
+| T3 | Truco -> Retruco              | No Quiero                   | 2 puntos para el retador      |
+| T4 | Truco -> Retruco -> Vale 4    | No Quiero                   | 3 puntos para el retador      |
+| T5 | Truco -> Retruco -> Vale 4    | Quiero                      | 4 puntos para el ganador mano |
++----+-------------------------------+-----------------------------+-------------------------------+
+
+
+6. RIESGOS TÉCNICOS Y ESTRATEGIAS DE MITIGACIÓN
+--------------------------------------------------------------------------------
+- Riesgo 1: Complejidad en la casuística de reglas y discrepancias cliente/servidor.
+  * Mitigación: Desarrollo del motor `truco_core` en Dart mediante TDD (Test-Driven 
+    Development) con una cobertura unitaria exigida superior al 95%, ejecutada en 
+    el pipeline de integración continua (CI) antes de cualquier integración visual.
+- Riesgo 2: Colusión entre compañeros en partidas clasificatorias por equipos.
+  * Mitigación: Emparejamiento aleatorio obligatorio en colas Ranked, ofuscación 
+    de identificadores antes de iniciar la partida y monitoreo analítico de patrones.
+- Riesgo 3: Inestabilidad de red en dispositivos móviles en tránsito.
+  * Mitigación: Heartbeats activos cada 5 segundos, ventana de reconexión de 45 s 
+    con congelamiento de turno y rehidratación inmediata de snapshot de mesa.
+
+================================================================================
+Fin del Documento de Especificación v0.2.0
+================================================================================

@@ -1,0 +1,79 @@
+# ==============================================================================
+# SISTEMA OPERATIVO Y ARCHIVOS TEMPORALES
+# ==============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+*.swp
+*~
+
+# ==============================================================================
+# ENTORNOS DE DESARROLLO (IDEs) Y EDITORES
+# ==============================================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+.fleet/
+
+# ==============================================================================
+# SEGURIDAD, SECRETOS Y VARIABLES DE ENTORNO
+# ==============================================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.p12
+*.jks
+*.keystore
+
+# ==============================================================================
+# NODE.JS / TYPESCRIPT / FRONTEND / BACKEND
+# ==============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+.cache/
+coverage/
+
+# ==============================================================================
+# DESARROLLO MÓVIL (ANDROID / IOS / FLUTTER / REACT NATIVE)
+# ==============================================================================
+# Android
+android/.gradle/
+android/app/build/
+android/local.properties
+android/captures/
+*.apk
+*.aab
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/DerivedData/
+*.ipa
+
+# Flutter / Dart
+.dart_tool/
+.packages
+
+# ==============================================================================
+# LOGS Y BASES DE DATOS LOCALES
+# ==============================================================================
+logs/
+*.log
+*.sqlite
+*.sqlite3
