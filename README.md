@@ -24,7 +24,9 @@ TrucoUruguayo/
 │
 ├── docs/                  # Especificaciones, arquitectura y contratos de comunicación
 │   ├── ARQUITECTURA.md    # Diseño de capas, diagramas de secuencia y eventos WS
-│   └── REQUERIMIENTOS.txt # Especificación de requerimientos de software (SRS v0.2.0)
+│   ├── REQUERIMIENTOS_MVP.md
+│   ├── DECISIONES_DE_REGLAS.md
+│   └── VERIFICACION.md
 │
 ├── .gitignore             # Exclusiones completas para mobile, backend, IDEs y secretos
 └── README.md              # Este archivo

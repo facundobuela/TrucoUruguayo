@@ -23,7 +23,28 @@ class TrucoCard {
   /// Retorna si es una figura (10=Sota, 11=Caballo, 12=Rey).
   bool get isFigure => number >= 10 && number <= 12;
 
-  String get shortCode => '${number}_${suit.name}';
+  /// Identificador estable usado en el protocolo de red, p. ej. `espada_2`.
+  String get id => '${suit.name}_$number';
+
+  /// Reconstruye una carta desde su [id] (`espada_2`). Lanza [FormatException]
+  /// si el texto no corresponde a una carta válida de la baraja de 40.
+  static TrucoCard fromId(String id) {
+    final parts = id.split('_');
+    if (parts.length != 2) throw FormatException('Id de carta inválido: $id');
+    final suit = Suit.values.where((s) => s.name == parts[0]).firstOrNull;
+    final number = int.tryParse(parts[1]);
+    if (suit == null ||
+        number == null ||
+        number < 1 ||
+        number > 12 ||
+        number == 8 ||
+        number == 9) {
+      throw FormatException('Id de carta inválido: $id');
+    }
+    return TrucoCard(number, suit);
+  }
+
+  Map<String, dynamic> toJson() => {'id': id, 'number': number, 'suit': suit.name};
 
   @override
   bool operator ==(Object other) =>

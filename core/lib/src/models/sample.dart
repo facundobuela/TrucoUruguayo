@@ -44,6 +44,10 @@ class Sample {
 
   Suit get suit => card.suit;
 
+  Map<String, dynamic> toJson() => card.toJson();
+
+  factory Sample.fromId(String id) => Sample(TrucoCard.fromId(id));
+
   /// Retorna si la muestra descubierta es una de las 5 piezas estándar.
   bool get sampleIsPiece =>
       card.number == 2 ||

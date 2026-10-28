@@ -1,13 +1,39 @@
 # `truco_core`
 
-Núcleo determinista y puro de reglas para el **Truco Uruguayo**.
+Núcleo determinista y puro de reglas del **Truco Uruguayo** (1 vs 1). Dart puro:
+sin Flutter, sin `dart:io`, sin dependencias de runtime. Se usa idéntico en el
+cliente (modo offline) y en el servidor autoritativo.
 
-## Responsabilidades
-- Baraja española de 40 cartas y generación aleatoria con semilla.
-- Determinación de la **Muestra**, **Piezas** (2, 4, 5, 11-Perico, 10-Perica) y **Carta Sustituta** (Rey 12).
-- Jerarquía estricta de cartas y desempates.
-- Algoritmo de cálculo de **Flor** y **Envido** con piezas uruguayas.
-- Árbitro de rondas, pardas (empates en 1ª, 2ª y 3ª) y cantos de Truco.
-- Máquina de estados inmutable de la mano.
+## Contenido
 
-Este paquete no depende de Flutter, lo que permite su importación directa tanto en la app cliente como en el backend.
+| Módulo | Archivo | Responsabilidad |
+|--------|---------|-----------------|
+| Modelos | `models/` | `TrucoCard`, `Suit`, `Seat`, `Sample` (muestra, piezas y Rey sustituto) |
+| Mazo auditable | `deck/deck.dart`, `crypto/sha256.dart` | Semilla CSPRNG → barajado determinista (Fisher-Yates sin sesgo); compromiso SHA-256 publicado y semilla revelada al terminar la mano |
+| Cálculos | `rules/` | Envido, Flor, cadena de envido (Falta), árbitro de rondas y pardas |
+| Mano | `game/hand.dart` | Máquina de estados: turnos, truco/retruco/vale cuatro, envido, flor/contraflor, mazo, timeouts, serialización |
+| Partida | `game/match.dart` | 30 puntos, rotación del mano, semillas y auditoría |
+| Vista | `game/view.dart` | `HandView`: lo único que un jugador puede saber (Zero-Trust) y sus acciones legales |
+| Bot | `bot/heuristic_bot.dart` | IA heurística que sólo ve su `HandView` |
+| Protocolo | `protocol/messages.dart` | Códecs JSON de `docs/ARQUITECTURA.md` |
+
+## Uso
+
+```dart
+final match = TrucoMatch();           // semilla CSPRNG por mano
+final hand = match.startHand();
+final view = HandView.of(hand, Seat.a);   // acciones legales en view.legalActions
+match.apply(Seat.a, view.legalActions.first);
+```
+
+## Pruebas
+
+```
+dart pub get && dart test
+```
+
+121 pruebas: matriz del SRS (J, P, F, E, T), jerarquía de las 40 cartas para
+todas las muestras, SHA-256 contra vectores NIST, fuzzing con acciones legales
+e ilegales sobre 4000 manos, 300 partidas bot vs bot y determinismo por semilla.
+
+Reglas ambiguas resueltas y pendientes de validar: `docs/DECISIONES_DE_REGLAS.md`.
