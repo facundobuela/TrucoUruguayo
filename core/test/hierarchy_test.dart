@@ -69,7 +69,7 @@ void main() {
     test('las piezas siempre superan a las matas, y éstas al resto', () {
       for (final suit in Suit.values) {
         final s = Sample(c(6, suit));
-        final power = (TrucoCard x) => s.classify(x).trickPower;
+        int power(TrucoCard x) => s.classify(x).trickPower;
         final weakestPiece = [2, 4, 5, 10, 11].map((n) => power(c(n, suit))).reduce((a, b) => a < b ? a : b);
         expect(weakestPiece > power(c(1, Suit.espada)), true);
         expect(power(c(7, Suit.oro)) > power(c(3, Suit.espada)), true);

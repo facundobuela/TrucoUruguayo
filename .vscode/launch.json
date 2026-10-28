@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Truco Uruguayo (Web Server - Puerto 8080)",
+      "cwd": "client",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "web-server",
+        "--web-port",
+        "8080",
+        "--web-hostname",
+        "localhost"
+      ]
+    },
+    {
+      "name": "Truco Uruguayo (Edge)",
+      "cwd": "client",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "edge"
+    }
+  ]
+}

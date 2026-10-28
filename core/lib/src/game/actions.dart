@@ -70,7 +70,7 @@ final class PlayCardAction extends GameAction {
   Map<String, dynamic> toJson() => {'type': 'PLAY_CARD', 'cardId': card.id};
 
   @override
-  bool operator ==(Object o) => o is PlayCardAction && o.card == card;
+  bool operator ==(Object other) => other is PlayCardAction && other.card == card;
   @override
   int get hashCode => Object.hash('play', card);
   @override
@@ -85,7 +85,7 @@ final class CallAction extends GameAction {
   Map<String, dynamic> toJson() => {'type': 'CALL_BET', 'betType': bet.wire};
 
   @override
-  bool operator ==(Object o) => o is CallAction && o.bet == bet;
+  bool operator ==(Object other) => other is CallAction && other.bet == bet;
   @override
   int get hashCode => Object.hash('call', bet);
   @override
@@ -101,7 +101,7 @@ final class RespondAction extends GameAction {
       {'type': 'RESPOND_BET', 'response': response.wire};
 
   @override
-  bool operator ==(Object o) => o is RespondAction && o.response == response;
+  bool operator ==(Object other) => other is RespondAction && other.response == response;
   @override
   int get hashCode => Object.hash('respond', response);
   @override
@@ -116,7 +116,7 @@ final class FoldAction extends GameAction {
   Map<String, dynamic> toJson() => {'type': 'FOLD_HAND'};
 
   @override
-  bool operator ==(Object o) => o is FoldAction;
+  bool operator ==(Object other) => other is FoldAction;
   @override
   int get hashCode => 'fold'.hashCode;
   @override

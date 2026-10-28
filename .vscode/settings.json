@@ -1,0 +1,6 @@
+{
+  "dart.projectSearchPaths": [
+    "core",
+    "client"
+  ]
+}
