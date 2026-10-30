@@ -38,6 +38,14 @@ class _GameScreenState extends State<GameScreen> {
   bool _isBotThinking = false;
   String _statusMessage = '¡Bienvenido al Truco Uruguayo!';
 
+  // Globos de texto ("¡Truco!", "Tengo 28"...) que dicen los jugadores.
+  final Random _rng = Random();
+  final List<_BubbleMsg> _bubbleQueue = [];
+  _BubbleMsg? _activeBubble;
+  int _bubbleSeq = 0;
+  Timer? _bubbleTimer;
+  Timer? _botTimer;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +54,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _startNewMatch() {
     setState(() {
+      _cancelPending();
       _match = TrucoMatch();
       _match.startHand();
       _statusMessage = 'Mano 1 iniciada. ¡Buena suerte!';
@@ -56,10 +65,29 @@ class _GameScreenState extends State<GameScreen> {
   void _startNextHand() {
     if (_match.isOver) return;
     setState(() {
+      _cancelPending();
       _match.startHand();
       _statusMessage = 'Mano ${_match.handNumber} iniciada.';
     });
     _checkBotTurn();
+  }
+
+  @override
+  void dispose() {
+    _botTimer?.cancel();
+    _bubbleTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Cancela temporizadores y globos pendientes (nueva partida / nueva mano).
+  void _cancelPending() {
+    _botTimer?.cancel();
+    _botTimer = null;
+    _bubbleTimer?.cancel();
+    _bubbleTimer = null;
+    _bubbleQueue.clear();
+    _activeBubble = null;
+    _isBotThinking = false;
   }
 
   void _checkBotTurn() {
@@ -68,22 +96,117 @@ class _GameScreenState extends State<GameScreen> {
 
     if (hand.toAct == Seat.b && !_isBotThinking) {
       setState(() => _isBotThinking = true);
-      Timer(const Duration(milliseconds: 900), () {
-        if (!mounted) return;
-        final currentHand = _match.hand;
-        if (currentHand != null && currentHand.toAct == Seat.b && !currentHand.isFinished) {
-          final view = HandView.of(currentHand, Seat.b);
-          final action = _bot.choose(view);
-          final events = _match.apply(Seat.b, action);
-          _handleEvents(events, isBot: true);
-        }
-        setState(() => _isBotThinking = false);
-        _checkBotTurn();
-      });
+      _scheduleBotMove(900);
     }
   }
 
-  void _handleEvents(List<GameEvent> events, {required bool isBot}) {
+  void _scheduleBotMove(int delayMs) {
+    _botTimer?.cancel();
+    _botTimer = Timer(Duration(milliseconds: delayMs), () {
+      if (!mounted) return;
+      // Esperar a que terminen los globos para que se alcance a leer lo dicho.
+      if (_bubblesBusy) {
+        _scheduleBotMove(300);
+        return;
+      }
+      final currentHand = _match.hand;
+      if (currentHand != null && currentHand.toAct == Seat.b && !currentHand.isFinished) {
+        final view = HandView.of(currentHand, Seat.b);
+        final action = _bot.choose(view);
+        final events = _match.apply(Seat.b, action);
+        _handleEvents(events, actor: Seat.b, action: action);
+      }
+      setState(() => _isBotThinking = false);
+      _checkBotTurn();
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Globos de texto
+  // ---------------------------------------------------------------------------
+
+  bool get _bubblesBusy => _activeBubble != null || _bubbleQueue.isNotEmpty;
+
+  String _pick(List<String> options) => options[_rng.nextInt(options.length)];
+
+  /// Encola un globo de texto dicho por [seat]. Se muestran de a uno, en orden.
+  void _say(Seat seat, String text) {
+    final ms = max(1300, 800 + text.length * 45);
+    _bubbleQueue.add(_BubbleMsg(++_bubbleSeq, seat, text, ms));
+    _pumpBubbles();
+  }
+
+  void _pumpBubbles() {
+    if (_activeBubble != null || _bubbleQueue.isEmpty || !mounted) return;
+    final next = _bubbleQueue.removeAt(0);
+    setState(() => _activeBubble = next);
+    _bubbleTimer = Timer(Duration(milliseconds: next.durationMs), () {
+      if (!mounted) return;
+      setState(() => _activeBubble = null);
+      _bubbleTimer = Timer(const Duration(milliseconds: 150), _pumpBubbles);
+    });
+  }
+
+  String _callPhrase(BetCall bet) {
+    switch (bet) {
+      case BetCall.envido:
+        final count = _match.hand?.envidoChain.envidoCount ?? 1;
+        return count >= 2 ? '¡Envido, envido!' : '¡Envido!';
+      case BetCall.realEnvido:
+        return '¡Real envido!';
+      case BetCall.faltaEnvido:
+        return '¡Falta envido!';
+      case BetCall.flor:
+        return '¡Flor!';
+      case BetCall.contraflor:
+        return '¡Contraflor!';
+      case BetCall.truco:
+        return '¡Truco!';
+      case BetCall.retruco:
+        return '¡Quiero retruco!';
+      case BetCall.valeCuatro:
+        return '¡Quiero vale cuatro!';
+    }
+  }
+
+  String _responsePhrase(BetResponse r) {
+    switch (r) {
+      case BetResponse.quiero:
+        return _pick(['¡Quiero!', '¡Quiero!', '¡Quiero, dale!']);
+      case BetResponse.noQuiero:
+        return _pick(['No quiero', 'No quiero', 'No, no quiero']);
+      case BetResponse.conFlorMeAchico:
+        return 'Con flor me achico';
+    }
+  }
+
+  /// Traduce los eventos de la jugada en globos de texto.
+  void _announceEvents(List<GameEvent> events, Seat actor, GameAction action) {
+    final hand = _match.hand;
+    for (final e in events) {
+      if (e is BetCalledEvent) {
+        _say(e.seat, _callPhrase(e.bet));
+      } else if (e is BetRespondedEvent) {
+        _say(e.seat, _responsePhrase(e.response));
+      } else if (e is EnvidoResolvedEvent && hand != null) {
+        // El mano canta su tanto; el pie lo iguala/supera o dice "son buenas".
+        _say(hand.mano, 'Tengo ${e.manoPoints}');
+        _say(hand.mano.other,
+            e.piePoints == null ? 'Son buenas' : 'Tengo ${e.piePoints}');
+      } else if (e is FlorComparedEvent && hand != null) {
+        final manoScore = hand.mano == Seat.a ? e.scoreA : e.scoreB;
+        final pieScore = hand.mano == Seat.a ? e.scoreB : e.scoreA;
+        _say(hand.mano, 'Flor de $manoScore');
+        _say(hand.mano.other, 'Flor de $pieScore');
+      }
+    }
+    if (action is FoldAction) {
+      _say(actor, _pick(['Me voy al mazo', 'Al mazo']));
+    }
+  }
+
+  void _handleEvents(List<GameEvent> events, {required Seat actor, required GameAction action}) {
+    _announceEvents(events, actor, action);
     for (final e in events) {
       if (e is BetCalledEvent) {
         final actor = e.seat == Seat.a ? 'Vos cantaste' : 'El Bot cantó';
@@ -110,7 +233,7 @@ class _GameScreenState extends State<GameScreen> {
 
     try {
       final events = _match.apply(Seat.a, action);
-      _handleEvents(events, isBot: false);
+      _handleEvents(events, actor: Seat.a, action: action);
       _checkBotTurn();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -180,6 +303,13 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  /// Puntaje en vivo: incluye los puntos de flor/envido ya acreditados en la
+  /// mano en curso (el marcador de la partida recién se actualiza al cerrarla).
+  int _liveScore(Seat seat) {
+    final hand = _match.hand;
+    return hand != null ? hand.scoreOf(seat) : _match.scoreOf(seat);
+  }
+
   Widget _buildScoreBoard(bool isCompact) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 16, vertical: isCompact ? 4 : 8),
@@ -189,7 +319,7 @@ class _GameScreenState extends State<GameScreen> {
       ),
       child: Row(
         children: [
-          Expanded(child: _buildScoreBadge('Vos', _match.scoreA, Seat.a, isCompact)),
+          Expanded(child: _buildScoreBadge('Vos', _liveScore(Seat.a), Seat.a, isCompact)),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -203,7 +333,7 @@ class _GameScreenState extends State<GameScreen> {
               ],
             ),
           ),
-          Expanded(child: _buildScoreBadge('Bot (IA)', _match.scoreB, Seat.b, isCompact)),
+          Expanded(child: _buildScoreBadge('Bot (IA)', _liveScore(Seat.b), Seat.b, isCompact)),
         ],
       ),
     );
@@ -258,52 +388,82 @@ class _GameScreenState extends State<GameScreen> {
         final matH = matConstraints.maxHeight;
         final matW = matConstraints.maxWidth;
 
-        // Muestra (centro-arriba, pequeña)
-        final sampleW = (effectiveW * 0.17).clamp(58.0, 80.0);
-        final sampleH = sampleW * 1.48;
-
-        // Cartas del bot (izquierda, apiladas en abanico)
-        final botCardW = (effectiveW * 0.14).clamp(48.0, 62.0);
+        // --- Banda superior: [mazo + muestra] a la izquierda, mano del bot al centro.
+        final botCardW = (effectiveW * 0.15).clamp(50.0, 66.0);
         final botCardH = botCardW * 1.48;
+        final botHandH = botCardH + 20; // + margen por la rotación del abanico
 
-        // Espacio disponible para las dos cartas de mesa + gap + label
-        // Area usable: matH - sampleH(+20 top) - 10(bottom) - 30(label+gap)
-        final usableForCards = (matH - sampleH - 60).clamp(80.0, 400.0);
-        // Dos cartas apiladas (bot + jugador) con 8px gap
-        final tableCardH = ((usableForCards - 8) / 2).clamp(52.0, 140.0);
-        final tableCardW = (tableCardH / 1.48).clamp(36.0, 95.0);
+        final deckCardW = (effectiveW * 0.17).clamp(54.0, 72.0);
+        final deckCardH = deckCardW * 1.48;
+        final deckH = deckCardH + 12; // + grosor del mazo
+
+        const bandPadTop = 8.0;
+        final bandH = max(botHandH, deckH) + bandPadTop + 8;
+
+        // --- Zona de cartas jugadas: todo el ancho y el alto restante.
+        const roundGap = 16.0;
+        const cardGap = 8.0;
+        const labelH = 22.0; // texto de resultado + separación
+        final availH = (matH - bandH - 12).clamp(80.0, 600.0);
+        var tableCardH = ((availH - cardGap - labelH) / 2).clamp(52.0, 150.0);
+        var tableCardW = tableCardH / 1.48;
+        // Que entren las 3 rondas a lo ancho sin scroll.
+        final maxCardWByWidth = (matW - 24 - 2 * roundGap) / 3;
+        if (tableCardW > maxCardWByWidth) {
+          tableCardW = maxCardWByWidth.clamp(30.0, 110.0);
+          tableCardH = tableCardW * 1.48;
+        }
 
         return Stack(
           children: [
-            // Centro-Arriba: MUESTRA (sin etiqueta grande)
+            // Arriba a la izquierda: MAZO con la MUESTRA asomando por debajo.
             if (hand != null)
               Positioned(
-                top: 10,
-                left: (matW - sampleW) / 2,
-                child: _buildSampleCard(hand.sample, sampleW, sampleH),
+                top: bandPadTop,
+                left: 10,
+                child: _buildDeckWithSample(hand.sample, deckCardW, deckCardH),
               ),
 
-            // Izquierda: Cartas tapadas del Bot en abanico
+            // Arriba al centro: cartas tapadas del BOT (su lado de la mesa).
             Positioned(
-              top: matH * 0.20,
-              left: 12,
-              child: _buildBotCards(hand?.cardsOf(Seat.b).length ?? 0, botCardW, botCardH),
+              top: bandPadTop,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _buildBotCards(hand?.cardsOf(Seat.b).length ?? 0, botCardW, botCardH),
+              ),
             ),
 
-            // Centro del tapete: Rondas jugadas (cartas lado a lado)
+            // Centro del tapete: rondas jugadas (bot arriba, vos abajo).
             Positioned(
-              top: sampleH + 16,
+              top: bandH,
               left: 0,
               right: 0,
               bottom: 0,
-              child: OverflowBox(
-                alignment: Alignment.center,
-                maxHeight: double.infinity,
-                child: Center(
-                  child: _buildTablePlayedCards(hand, tableCardW, tableCardH),
-                ),
+              child: Center(
+                child: _buildTablePlayedCards(hand, tableCardW, tableCardH),
               ),
             ),
+
+            // Globo de texto de quien está hablando (rival arriba, vos abajo).
+            if (_activeBubble != null)
+              _activeBubble!.seat == Seat.b
+                  ? Positioned(
+                      top: bandH - 6,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: _buildSpeechBubble(_activeBubble!, tailUp: true, maxWidth: matW * 0.7),
+                      ),
+                    )
+                  : Positioned(
+                      bottom: 8,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: _buildSpeechBubble(_activeBubble!, tailUp: false, maxWidth: matW * 0.7),
+                      ),
+                    ),
 
             // Cartel de fin de mano o de partida
             if (hand != null && hand.isFinished)
@@ -351,28 +511,160 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildSampleCard(Sample sample, double width, double height) {
-    // Muestra compacta: solo la carta, con borde dorado.
-    // Si es pieza (el 12 sustituye a otra carta), se muestra un chip pequeño debajo.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildCardVisual(sample.card, width: width, height: height, isSample: true),
-        if (sample.sampleIsPiece)
-          Container(
-            margin: const EdgeInsets.only(top: 3),
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '12 = ${sample.card.number}',
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.amberAccent),
-            ),
+  /// Nombre legible de una carta, p. ej. "4 de Basto".
+  String _cardName(TrucoCard c) => '${c.number} de ${c.suit.displayName}';
+
+  /// Dorso de carta (reverso.png) con borde y sombra opcional.
+  Widget _buildCardBack(double width, double height, {bool shadow = true}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: Colors.white54, width: 1),
+        boxShadow: shadow
+            ? const [BoxShadow(color: Colors.black54, blurRadius: 5, offset: Offset(1, 2))]
+            : null,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        'assets/cards/reverso.png',
+        fit: BoxFit.fill,
+        errorBuilder: (context, error, stackTrace) =>
+            Container(color: const Color(0xFF8B2500)),
+      ),
+    );
+  }
+
+  /// Mazo de cartas tapadas con la MUESTRA boca arriba asomando por debajo,
+  /// inclinada, como en una mesa real. Tocar el mazo amplía la muestra.
+  Widget _buildDeckWithSample(Sample sample, double cardW, double cardH) {
+    const layers = 3; // bordes visibles que simulan el grosor del mazo
+    const layerStep = 2.0;
+    final totalW = cardW * 1.68;
+    final totalH = cardH + layers * layerStep;
+
+    return Semantics(
+      button: true,
+      label: 'Muestra: ${_cardName(sample.card)}. Tocá para ampliar.',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _showSampleDialog(sample),
+        child: SizedBox(
+          width: totalW,
+          height: totalH + (sample.sampleIsPiece ? 18 : 0),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Muestra: boca arriba, inclinada, asomando por la derecha/arriba.
+              Positioned(
+                left: cardW * 0.55,
+                top: 0,
+                child: Transform.rotate(
+                  angle: 0.26,
+                  child: _buildCardVisual(
+                    sample.card,
+                    width: cardW,
+                    height: cardH,
+                    isSample: true,
+                  ),
+                ),
+              ),
+
+              // Grosor del mazo: bordes blancos desplazados hacia abajo.
+              for (var k = layers; k >= 1; k--)
+                Positioned(
+                  left: 0,
+                  top: k * layerStep,
+                  child: Container(
+                    width: cardW,
+                    height: cardH,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDE8DC),
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(color: Colors.black26, width: 1),
+                    ),
+                  ),
+                ),
+
+              // Dorso superior del mazo.
+              Positioned(left: 0, top: 0, child: _buildCardBack(cardW, cardH)),
+
+              // Si la muestra es una pieza, el 12 del palo toma su lugar.
+              if (sample.sampleIsPiece)
+                Positioned(
+                  left: 0,
+                  top: totalH + 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '12 = ${sample.card.number}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amberAccent,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-      ],
+        ),
+      ),
+    );
+  }
+
+  void _showSampleDialog(Sample sample) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: const Color(0xEE0A1811),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.amber, width: 2),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'MUESTRA',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _buildCardVisual(sample.card, width: 150, height: 222, isSample: true),
+              const SizedBox(height: 10),
+              Text(
+                _cardName(sample.card),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                sample.sampleIsPiece
+                    ? 'Es una pieza: el 12 de ${sample.suit.displayName} toma su lugar.'
+                    : 'Las piezas son el 2, 4, 5, 11 y 10 de ${sample.suit.displayName}.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cerrar'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -447,7 +739,7 @@ class _GameScreenState extends State<GameScreen> {
     final rounds = hand.rounds;
     // Cada ronda: columna con carta del bot (arriba) y carta del jugador (abajo),
     // separadas por un pequeño gap. Las rondas están una al lado de la otra.
-    const double roundGap = 20; // gap entre rondas
+    const double roundGap = 16; // gap entre rondas (igual que en _buildPlayMat)
     const double cardGap = 8;   // gap entre carta bot y carta jugador dentro de la ronda
 
     return SingleChildScrollView(
@@ -832,6 +1124,65 @@ class _GameScreenState extends State<GameScreen> {
 
   // --- Funciones para nombres legibles en español (Traducción formal) ---
 
+  /// Globo de texto con cola. El del rival es blanco; el tuyo, crema.
+  Widget _buildSpeechBubble(_BubbleMsg msg, {required bool tailUp, required double maxWidth}) {
+    final isMe = msg.seat == Seat.a;
+    final bg = isMe ? const Color(0xFFFFF1B8) : Colors.white;
+    final tail = CustomPaint(
+      size: const Size(18, 10),
+      painter: _BubbleTailPainter(color: bg, up: tailUp),
+    );
+    return Semantics(
+      liveRegion: true,
+      label: '${isMe ? 'Vos' : 'El Bot'}: ${msg.text}',
+      child: ExcludeSemantics(
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey(msg.id),
+          tween: Tween<double>(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          builder: (context, t, child) => Opacity(
+            opacity: t.clamp(0.0, 1.0),
+            child: Transform.scale(
+              scale: 0.7 + 0.3 * t,
+              alignment: tailUp ? Alignment.topCenter : Alignment.bottomCenter,
+              child: child,
+            ),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (tailUp) tail,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black45, blurRadius: 8, offset: Offset(0, 3)),
+                    ],
+                  ),
+                  child: Text(
+                    msg.text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF14231B),
+                    ),
+                  ),
+                ),
+                if (!tailUp) tail,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formatBetName(BetCall bet) {
     switch (bet) {
       case BetCall.envido:
@@ -886,4 +1237,42 @@ class _GameScreenState extends State<GameScreen> {
         return 'Irse al mazo';
     }
   }
+}
+
+/// Mensaje dicho por un jugador, mostrado como globo de texto.
+class _BubbleMsg {
+  final int id;
+  final Seat seat;
+  final String text;
+  final int durationMs;
+  const _BubbleMsg(this.id, this.seat, this.text, this.durationMs);
+}
+
+/// Cola triangular del globo de texto (apunta hacia arriba o hacia abajo).
+class _BubbleTailPainter extends CustomPainter {
+  final Color color;
+  final bool up;
+  const _BubbleTailPainter({required this.color, required this.up});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    if (up) {
+      path
+        ..moveTo(0, size.height)
+        ..lineTo(size.width / 2, 0)
+        ..lineTo(size.width, size.height);
+    } else {
+      path
+        ..moveTo(0, 0)
+        ..lineTo(size.width / 2, size.height)
+        ..lineTo(size.width, 0);
+    }
+    path.close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BubbleTailPainter old) =>
+      old.color != color || old.up != up;
 }
