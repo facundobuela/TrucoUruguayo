@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:truco_client/main.dart';
+import 'package:truco_client/app.dart';
 
 void main() {
   testWidgets('TrucoApp smoke test', (WidgetTester tester) async {
