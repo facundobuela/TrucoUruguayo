@@ -9,8 +9,8 @@ import 'opponent_hand.dart';
 import 'speech_bubble.dart';
 import 'table_rounds.dart';
 
-/// Tapete: arriba el mazo con la muestra (izquierda) y la mano del rival
-/// (centro); debajo, las rondas jugadas; encima, globos y cartel de fin de mano.
+/// Tapete: el mazo con la muestra cambia de lado según quién reparte; la mano
+/// del rival va arriba al centro, con las rondas jugadas debajo.
 class PlayMat extends StatelessWidget {
   const PlayMat({
     super.key,
@@ -41,7 +41,7 @@ class PlayMat extends StatelessWidget {
         final matH = matConstraints.maxHeight;
         final matW = matConstraints.maxWidth;
 
-        // --- Banda superior: [mazo + muestra] a la izquierda, mano del bot al centro.
+        // --- Mazo y muestra: a la izquierda del jugador cuando reparte el bot.
         final botCardW = (effectiveW * 0.15).clamp(50.0, 66.0);
         final botCardH = botCardW * 1.48;
         final botHandH = botCardH + 20; // + margen por la rotación del abanico
@@ -49,6 +49,13 @@ class PlayMat extends StatelessWidget {
         final deckCardW = (effectiveW * 0.17).clamp(54.0, 72.0);
         final deckCardH = deckCardW * 1.48;
         final deckH = deckCardH + 12; // + grosor del mazo
+        final deckWidgetH =
+            deckH + (view?.sample.sampleIsPiece == true ? 18 : 0);
+        final botDeals = view != null && view!.mano == me;
+        final deckTop = min(
+          matH * (botDeals ? 0.61 : 0.35),
+          max(0.0, matH - deckWidgetH),
+        );
 
         const bandPadTop = 8.0;
         final bandH = max(botHandH, deckH) + bandPadTop + 8;
@@ -69,12 +76,18 @@ class PlayMat extends StatelessWidget {
 
         return Stack(
           children: [
-            // Arriba a la izquierda: MAZO con la MUESTRA asomando por debajo.
+            // El repartidor queda del lado opuesto al mano; mover juntos mazo y
+            // muestra mantiene visible la carta en el lado desde donde reparte.
             if (view != null)
               Positioned(
-                top: bandPadTop,
-                left: 10,
-                child: DeckWithSample(sample: view!.sample, cardW: deckCardW, cardH: deckCardH),
+                top: deckTop,
+                left: botDeals ? null : 10,
+                right: botDeals ? 10 : null,
+                child: DeckWithSample(
+                  sample: view!.sample,
+                  cardW: deckCardW,
+                  cardH: deckCardH,
+                ),
               ),
 
             // Arriba al centro: cartas tapadas del BOT (su lado de la mesa).
@@ -83,7 +96,11 @@ class PlayMat extends StatelessWidget {
               left: 0,
               right: 0,
               child: Center(
-                child: OpponentHand(count: view?.opponentCardsLeft ?? 0, width: botCardW, height: botCardH),
+                child: OpponentHand(
+                  count: view?.opponentCardsLeft ?? 0,
+                  width: botCardW,
+                  height: botCardH,
+                ),
               ),
             ),
 
@@ -94,7 +111,11 @@ class PlayMat extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: Center(
-                child: TableRounds(view: view, cardW: tableCardW, cardH: tableCardH),
+                child: TableRounds(
+                  view: view,
+                  cardW: tableCardW,
+                  cardH: tableCardH,
+                ),
               ),
             ),
 
@@ -106,7 +127,12 @@ class PlayMat extends StatelessWidget {
                       left: 0,
                       right: 0,
                       child: Center(
-                        child: SpeechBubble(msg: bubble!, isMine: false, tailUp: true, maxWidth: matW * 0.7),
+                        child: SpeechBubble(
+                          msg: bubble!,
+                          isMine: false,
+                          tailUp: true,
+                          maxWidth: matW * 0.7,
+                        ),
                       ),
                     )
                   : Positioned(
@@ -114,7 +140,12 @@ class PlayMat extends StatelessWidget {
                       left: 0,
                       right: 0,
                       child: Center(
-                        child: SpeechBubble(msg: bubble!, isMine: true, tailUp: false, maxWidth: matW * 0.7),
+                        child: SpeechBubble(
+                          msg: bubble!,
+                          isMine: true,
+                          tailUp: false,
+                          maxWidth: matW * 0.7,
+                        ),
                       ),
                     ),
 
@@ -128,15 +159,24 @@ class PlayMat extends StatelessWidget {
                     side: const BorderSide(color: Colors.amber, width: 2),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 18,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           isMatchOver
-                              ? (matchWinner == me ? '¡GANASTE EL PARTIDO!' : 'PERDISTE EL PARTIDO')
+                              ? (matchWinner == me
+                                    ? '¡GANASTE EL PARTIDO!'
+                                    : 'PERDISTE EL PARTIDO')
                               : 'Mano Finalizada',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 14),
@@ -144,13 +184,19 @@ class PlayMat extends StatelessWidget {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green[800],
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
                             minimumSize: const Size(140, 44),
                           ),
                           onPressed: isMatchOver ? onNewMatch : onNextHand,
                           child: Text(
                             isMatchOver ? 'Nueva Partida' : 'Siguiente Mano',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],

@@ -26,7 +26,10 @@ class ScoreBoard extends StatelessWidget {
     final target = v?.targetPoints ?? 30;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 16, vertical: isCompact ? 4 : 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 8 : 16,
+        vertical: isCompact ? 4 : 8,
+      ),
       decoration: const BoxDecoration(
         color: Color(0xFF142E21),
         border: Border(bottom: BorderSide(color: Colors.black45)),
@@ -48,12 +51,20 @@ class ScoreBoard extends StatelessWidget {
               children: [
                 Text(
                   'Mano #$handNumber',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'A $target PUNTOS',
-                  style: const TextStyle(fontSize: 11, letterSpacing: 1.1, color: Colors.white70),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.1,
+                    color: Colors.white70,
+                  ),
                 ),
               ],
             ),
@@ -91,16 +102,36 @@ class _ScoreBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuenas = score >= malasPoints;
-    final etapa = isBuenas ? 'Buenas (${score - malasPoints})' : 'Malas ($score)';
+    final etapa = isBuenas
+        ? 'Buenas (${score - malasPoints})'
+        : 'Malas ($score)';
 
     return Column(
       children: [
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
             // Indicador de mano sin emoji: asterisco tipográfico
-            if (isMano) const Text(' *', style: TextStyle(fontSize: 13, color: Colors.amberAccent, fontWeight: FontWeight.bold)),
+            if (isMano)
+              const Text(
+                ' *',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.amberAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
           ],
         ),
         Text(
@@ -111,7 +142,10 @@ class _ScoreBadge extends StatelessWidget {
             color: Colors.amberAccent,
           ),
         ),
-        Text(etapa, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+        Text(
+          etapa,
+          style: const TextStyle(fontSize: 11, color: Colors.white70),
+        ),
       ],
     );
   }
