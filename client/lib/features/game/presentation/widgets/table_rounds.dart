@@ -1,56 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:truco_core/truco_core.dart';
+import 'package:truco_client/features/game/controller/game_controller.dart';
 
-/// Rondas jugadas, una al lado de la otra: carta del rival arriba y la tuya
-/// abajo, con la ganadora resaltada.
+/// Mesa: muestra SOLO la ronda en juego (carta del rival arriba y la tuya
+/// abajo). Cuando la ronda se resuelve, las cartas se ven un momento y luego
+/// viajan al mazo, de modo que nunca se acumulan sobre el tapete.
 class TableRounds extends StatelessWidget {
   const TableRounds({
     super.key,
     required this.view,
     required this.cardW,
     required this.cardH,
+    this.collectedRounds = 0,
+    this.phase = RoundCollectPhase.none,
+    this.collectOffset = Offset.zero,
+    this.collectDuration = const Duration(milliseconds: 400),
   });
 
   final HandView? view;
   final double cardW;
   final double cardH;
 
+  /// Rondas ya recogidas al mazo: no se dibujan.
+  final int collectedRounds;
+
+  /// Fase de la recogida de la última ronda resuelta.
+  final RoundCollectPhase phase;
+
+  /// Desplazamiento (desde el centro de la mesa hasta el mazo) que recorren las
+  /// cartas al ser recogidas.
+  final Offset collectOffset;
+  final Duration collectDuration;
+
   @override
   Widget build(BuildContext context) {
     final v = view;
-    if (v == null || v.table.isEmpty) {
-      return const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.style_outlined, size: 40, color: Colors.white24),
-          SizedBox(height: 8),
-          Text(
-            'Tirá una carta para comenzar',
-            style: TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic),
-          ),
-        ],
-      );
+    if (v == null) return const SizedBox.shrink();
+
+    // Terminada la mano (y ya recogidas las cartas) la mesa queda vacía.
+    if (v.finished && phase == RoundCollectPhase.none) {
+      return const SizedBox.shrink();
     }
 
-    final rounds = v.table;
-    // Cada ronda: columna con carta del bot (arriba) y carta del jugador (abajo),
-    // separadas por un pequeño gap. Las rondas están una al lado de la otra.
-    const double roundGap = 16; // gap entre rondas (igual que en PlayMat)
-    const double cardGap = 8;   // gap entre carta bot y carta jugador dentro de la ronda
+    final visible = v.table.skip(collectedRounds).toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          for (int i = 0; i < rounds.length; i++) ...[
-            if (i > 0) const SizedBox(width: roundGap),
-            _RoundColumn(r: rounds[i], me: v.me, cardW: cardW, cardH: cardH, cardGap: cardGap),
-          ],
-        ],
+    // FittedBox garantiza que la ronda siempre entre en el espacio disponible
+    // (en pantallas muy bajas las cartas se achican en lugar de desbordar).
+    Widget content = FittedBox(
+      fit: BoxFit.scaleDown,
+      child: _RoundColumn(
+        r: visible.last,
+        me: v.me,
+        cardW: cardW,
+        cardH: cardH,
+        cardGap: 8,
       ),
     );
+
+    if (phase == RoundCollectPhase.collecting) {
+      content = TweenAnimationBuilder<double>(
+        key: ValueKey('collect-$collectedRounds'),
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: collectDuration,
+        curve: Curves.easeInCubic,
+        builder: (context, t, child) => Transform.translate(
+          offset: collectOffset * t,
+          child: Transform.scale(
+            scale: 1 - 0.65 * t,
+            child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
+          ),
+        ),
+        child: content,
+      );
+    }
+    return content;
   }
 }
 

@@ -15,6 +15,8 @@ class OfflineGameController extends GameController {
     HeuristicBot? bot,
     TrucoMatch Function()? matchFactory,
     this.botDelayMs = 900,
+    this.roundShowMs = 900,
+    this.roundCollectMs = 400,
   }) : _bot = bot ?? HeuristicBot(),
        _matchFactory = matchFactory ?? (() => TrucoMatch()) {
     _bubbles = SpeechBubbleQueue(onChanged: _notify);
@@ -23,6 +25,12 @@ class OfflineGameController extends GameController {
 
   /// Espera antes de que el bot juegue (sensación de "pensar").
   final int botDelayMs;
+
+  /// Tiempo que se ven las dos cartas de una ronda resuelta antes de recogerlas.
+  final int roundShowMs;
+
+  /// Duración de la animación con la que las cartas viajan al mazo.
+  final int roundCollectMs;
 
   final HeuristicBot _bot;
   final TrucoMatch Function() _matchFactory;
@@ -34,6 +42,9 @@ class OfflineGameController extends GameController {
   bool _disposed = false;
   String _statusMessage = '¡Bienvenido al Truco Uruguayo!';
   Timer? _botTimer;
+  Timer? _collectTimer;
+  RoundCollectPhase _roundPhase = RoundCollectPhase.none;
+  int _collectedRounds = 0;
 
   static const Seat _me = Seat.a;
   static const Seat _opponent = Seat.b;
@@ -63,7 +74,8 @@ class OfflineGameController extends GameController {
     return hand != null &&
         !hand.isFinished &&
         hand.toAct == _me &&
-        !_isBotThinking;
+        !_isBotThinking &&
+        _roundPhase == RoundCollectPhase.none;
   }
 
   @override
@@ -74,6 +86,15 @@ class OfflineGameController extends GameController {
 
   @override
   BubbleMsg? get activeBubble => _bubbles.active;
+
+  @override
+  RoundCollectPhase get roundPhase => _roundPhase;
+
+  @override
+  int get collectedRounds => _collectedRounds;
+
+  @override
+  Duration get roundCollectDuration => Duration(milliseconds: roundCollectMs);
 
   // ---------------------------------------------------------------------------
   // Ciclo de la partida
@@ -105,6 +126,9 @@ class OfflineGameController extends GameController {
     if (hand == null) return 'No hay una mano activa.';
     if (hand.isFinished) return 'La mano ya finalizó.';
     if (hand.toAct != _me) return 'No es tu turno.';
+    if (_roundPhase != RoundCollectPhase.none) {
+      return 'Esperá: se están recogiendo las cartas.';
+    }
 
     try {
       // Siempre a través de TrucoMatch para que se actualice el marcador.
@@ -121,6 +145,7 @@ class OfflineGameController extends GameController {
   void dispose() {
     _disposed = true;
     _botTimer?.cancel();
+    _collectTimer?.cancel();
     _bubbles.dispose();
     super.dispose();
   }
@@ -133,6 +158,10 @@ class OfflineGameController extends GameController {
   void _cancelPending() {
     _botTimer?.cancel();
     _botTimer = null;
+    _collectTimer?.cancel();
+    _collectTimer = null;
+    _roundPhase = RoundCollectPhase.none;
+    _collectedRounds = 0;
     _bubbles.clear();
     _isBotThinking = false;
   }
@@ -152,8 +181,9 @@ class OfflineGameController extends GameController {
     _botTimer?.cancel();
     _botTimer = Timer(Duration(milliseconds: delayMs), () {
       if (_disposed) return;
-      // Esperar a que terminen los globos para que se alcance a leer lo dicho.
-      if (_bubbles.busy) {
+      // Esperar a que terminen los globos (para leer lo dicho) y a que se
+      // despeje la mesa antes de jugar.
+      if (_bubbles.busy || _roundPhase != RoundCollectPhase.none) {
         _scheduleBotMove(300);
         return;
       }
@@ -182,6 +212,7 @@ class OfflineGameController extends GameController {
     required GameAction action,
   }) {
     _announceEvents(events, actor, action);
+    if (events.any((e) => e is RoundResolvedEvent)) _startRoundCollect();
     for (final e in events) {
       if (e is BetCalledEvent) {
         final who = e.seat == _me ? 'Vos cantaste' : 'El Bot cantó';
@@ -205,6 +236,25 @@ class OfflineGameController extends GameController {
       }
     }
     _notify();
+  }
+
+  /// Ronda resuelta: se muestran las dos cartas un momento, viajan al mazo y
+  /// recién entonces se puede seguir jugando. La mesa nunca acumula cartas.
+  void _startRoundCollect() {
+    _collectTimer?.cancel();
+    _roundPhase = RoundCollectPhase.showing;
+    _collectTimer = Timer(Duration(milliseconds: roundShowMs), () {
+      if (_disposed) return;
+      _roundPhase = RoundCollectPhase.collecting;
+      _notify();
+      _collectTimer = Timer(Duration(milliseconds: roundCollectMs), () {
+        if (_disposed) return;
+        _roundPhase = RoundCollectPhase.none;
+        _collectedRounds = _match.hand?.roundResults.length ?? 0;
+        _notify();
+        _checkBotTurn(); // el bot puede abrir la próxima ronda
+      });
+    });
   }
 
   /// Traduce los eventos de la jugada en globos de texto.

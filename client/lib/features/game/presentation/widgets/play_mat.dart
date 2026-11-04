@@ -2,15 +2,18 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:truco_core/truco_core.dart';
+import 'package:truco_client/features/game/controller/game_controller.dart';
 import 'package:truco_client/features/game/controller/speech_bubbles.dart';
 
 import 'deck_with_sample.dart';
 import 'opponent_hand.dart';
+import 'round_results_strip.dart';
 import 'speech_bubble.dart';
 import 'table_rounds.dart';
 
 /// Tapete: el mazo con la muestra cambia de lado según quién reparte; la mano
-/// del rival va arriba al centro, con las rondas jugadas debajo.
+/// del rival va arriba al centro y, debajo, la ronda en juego. Al resolverse una
+/// ronda, sus cartas viajan al mazo.
 class PlayMat extends StatelessWidget {
   const PlayMat({
     super.key,
@@ -21,6 +24,9 @@ class PlayMat extends StatelessWidget {
     required this.matchWinner,
     required this.onNextHand,
     required this.onNewMatch,
+    this.collectedRounds = 0,
+    this.roundPhase = RoundCollectPhase.none,
+    this.collectDuration = const Duration(milliseconds: 400),
   });
 
   final HandView? view;
@@ -33,6 +39,13 @@ class PlayMat extends StatelessWidget {
   final VoidCallback onNextHand;
   final VoidCallback onNewMatch;
 
+  /// Rondas ya recogidas al mazo (no se dibujan sobre la mesa).
+  final int collectedRounds;
+
+  /// Fase de la recogida de la última ronda resuelta.
+  final RoundCollectPhase roundPhase;
+  final Duration collectDuration;
+
   @override
   Widget build(BuildContext context) {
     final me = view?.me ?? Seat.a;
@@ -41,12 +54,15 @@ class PlayMat extends StatelessWidget {
         final matH = matConstraints.maxHeight;
         final matW = matConstraints.maxWidth;
 
+        // En pantallas muy bajas se achican el mazo y la mano del rival.
+        final fit = (matH / 340).clamp(0.6, 1.0);
+
         // --- Mazo y muestra: a la izquierda del jugador cuando reparte el bot.
-        final botCardW = (effectiveW * 0.15).clamp(50.0, 66.0);
+        final botCardW = (effectiveW * 0.15).clamp(50.0, 66.0) * fit;
         final botCardH = botCardW * 1.48;
         final botHandH = botCardH + 20; // + margen por la rotación del abanico
 
-        final deckCardW = (effectiveW * 0.17).clamp(54.0, 72.0);
+        final deckCardW = (effectiveW * 0.17).clamp(54.0, 72.0) * fit;
         final deckCardH = deckCardW * 1.48;
         final deckH = deckCardH + 12; // + grosor del mazo
         final deckWidgetH =
@@ -60,19 +76,26 @@ class PlayMat extends StatelessWidget {
         const bandPadTop = 8.0;
         final bandH = max(botHandH, deckH) + bandPadTop + 8;
 
-        // --- Zona de cartas jugadas: todo el ancho y el alto restante.
-        const roundGap = 16.0;
+        // --- Zona de la ronda en juego: una sola columna (rival arriba, vos
+        // abajo). Como las cartas se recogen al mazo, puede ser bien grande.
         const cardGap = 8.0;
         const labelH = 22.0; // texto de resultado + separación
-        final availH = (matH - bandH - 12).clamp(80.0, 600.0);
-        var tableCardH = ((availH - cardGap - labelH) / 2).clamp(52.0, 150.0);
-        var tableCardW = tableCardH / 1.48;
-        // Que entren las 3 rondas a lo ancho sin scroll.
-        final maxCardWByWidth = (matW - 24 - 2 * roundGap) / 3;
-        if (tableCardW > maxCardWByWidth) {
-          tableCardW = maxCardWByWidth.clamp(30.0, 110.0);
-          tableCardH = tableCardW * 1.48;
-        }
+        final availH = max(0.0, matH - bandH - 12);
+        final tableCardH = ((availH - cardGap - labelH) / 2).clamp(40.0, 165.0);
+        final tableCardW = tableCardH / 1.48;
+
+        // Hacia dónde viajan las cartas al recogerse: el dorso superior del mazo
+        // (DeckWithSample mide 1.68 veces el ancho de una carta).
+        const deckInset = 10.0;
+        final deckWidgetW = deckCardW * 1.68;
+        final deckPileCenter = Offset(
+          botDeals
+              ? matW - deckInset - deckWidgetW + deckCardW / 2
+              : deckInset + deckCardW / 2,
+          deckTop + deckCardH / 2,
+        );
+        final tableCenter = Offset(matW / 2, bandH + (matH - bandH) / 2);
+        final collectOffset = deckPileCenter - tableCenter;
 
         return Stack(
           children: [
@@ -104,7 +127,15 @@ class PlayMat extends StatelessWidget {
               ),
             ),
 
-            // Centro del tapete: rondas jugadas (bot arriba, vos abajo).
+            // Arriba a la derecha: resultado de cada ronda (las cartas se recogen).
+            if (view != null)
+              Positioned(
+                top: bandPadTop,
+                right: 10,
+                child: RoundResultsStrip(view: view!),
+              ),
+
+            // Centro del tapete: ronda en juego (bot arriba, vos abajo).
             Positioned(
               top: bandH,
               left: 0,
@@ -115,6 +146,10 @@ class PlayMat extends StatelessWidget {
                   view: view,
                   cardW: tableCardW,
                   cardH: tableCardH,
+                  collectedRounds: collectedRounds,
+                  phase: roundPhase,
+                  collectOffset: collectOffset,
+                  collectDuration: collectDuration,
                 ),
               ),
             ),
@@ -149,8 +184,10 @@ class PlayMat extends StatelessWidget {
                       ),
                     ),
 
-            // Cartel de fin de mano o de partida
-            if (view != null && view!.finished)
+            // Cartel de fin de mano o de partida (una vez despejada la mesa)
+            if (view != null &&
+                view!.finished &&
+                roundPhase == RoundCollectPhase.none)
               Center(
                 child: Card(
                   color: const Color(0xEE0A1811),

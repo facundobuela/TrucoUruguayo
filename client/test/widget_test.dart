@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:truco_client/app.dart';
+import 'package:truco_client/features/game/controller/game_controller.dart';
 import 'package:truco_client/features/game/controller/offline_game_controller.dart';
 import 'package:truco_client/features/game/presentation/game_screen.dart';
 import 'package:truco_core/truco_core.dart';
@@ -131,5 +134,105 @@ void main() {
 
     // Desmontar la pantalla cancela los temporizadores pendientes (bot y globos).
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('no aparece el cartel "Tirá una carta para comenzar"', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(const TrucoApp());
+    await tester.pump();
+    expect(find.text('Tirá una carta para comenzar'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('360x640 sin overflow con 12 repartos distintos', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    for (var seed = 1; seed <= 12; seed++) {
+      final controller = OfflineGameController(
+        botDelayMs: 60000,
+        matchFactory: () => TrucoMatch(
+          seedSupplier: () => Uint8List.fromList(List.filled(32, seed)),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: GameScreen(controller: controller)),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'reparto $seed');
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    }
+  });
+
+  testWidgets('la ronda resuelta se ve un momento y luego se recoge al mazo', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(440, 956);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final controller = OfflineGameController(
+      botDelayMs: 1,
+      roundShowMs: 300,
+      roundCollectMs: 200,
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await tester.pump();
+
+    int resultLabels() =>
+        find.text('Ganaste').evaluate().length +
+        find.text('Bot').evaluate().length +
+        find.text('Parda').evaluate().length;
+
+    // Se juega hasta que se resuelva la primera ronda.
+    for (
+      var i = 0;
+      i < 600 && controller.roundPhase == RoundCollectPhase.none;
+      i++
+    ) {
+      if (controller.isPlayerTurn) {
+        final legal = controller.view!.legalActions;
+        controller.perform(
+          legal.contains(const RespondAction(BetResponse.quiero))
+              ? const RespondAction(BetResponse.quiero)
+              : legal.firstWhere(
+                  (a) => a is PlayCardAction,
+                  orElse: () => legal.first,
+                ),
+        );
+      }
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(controller.roundPhase, RoundCollectPhase.showing);
+    await tester.pump();
+    expect(resultLabels(), 1, reason: 'se ve el resultado de la ronda');
+    expect(tester.takeException(), isNull);
+
+    // Cuando termina la recogida la mesa queda despejada.
+    for (
+      var i = 0;
+      i < 100 && controller.roundPhase != RoundCollectPhase.none;
+      i++
+    ) {
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(tester.takeException(), isNull, reason: 'durante la animación');
+    }
+    await tester.pump();
+    expect(controller.roundPhase, RoundCollectPhase.none);
+    expect(resultLabels(), 0, reason: 'las cartas ya no están sobre la mesa');
+
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
   });
 }

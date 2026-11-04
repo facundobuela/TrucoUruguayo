@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:truco_client/features/game/controller/game_controller.dart';
 import 'package:truco_client/features/game/controller/offline_game_controller.dart';
 import 'package:truco_core/truco_core.dart';
 
@@ -130,6 +131,69 @@ void main() {
 
     c.perform(const FoldAction());
     expect(notifications > 0, isTrue);
+    c.dispose();
+  });
+
+  testWidgets(
+    'al resolverse una ronda las cartas se recogen y recién después se sigue jugando',
+    (WidgetTester tester) async {
+      final c = OfflineGameController(
+        botDelayMs: 1,
+        roundShowMs: 100,
+        roundCollectMs: 50,
+      );
+
+      // Se juega (aceptando todo lo que cante el bot) hasta que se resuelva
+      // la primera ronda.
+      for (var i = 0; i < 600 && c.roundPhase == RoundCollectPhase.none; i++) {
+        if (c.isPlayerTurn) {
+          final legal = c.view!.legalActions;
+          final action = legal.contains(const RespondAction(BetResponse.quiero))
+              ? const RespondAction(BetResponse.quiero)
+              : legal.firstWhere(
+                  (a) => a is PlayCardAction,
+                  orElse: () => legal.first,
+                );
+          c.perform(action);
+        }
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(c.roundPhase, RoundCollectPhase.showing);
+      expect(c.isPlayerTurn, isFalse, reason: 'mientras se recogen no se juega');
+      expect(c.perform(const FoldAction()), isNotNull);
+      final table = c.view!.table;
+      expect(table.length - c.collectedRounds, 1);
+      expect(table.last.result, isNotNull);
+
+      var sawCollecting = false;
+      for (var i = 0; i < 100 && c.roundPhase != RoundCollectPhase.none; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+        if (c.roundPhase == RoundCollectPhase.collecting) sawCollecting = true;
+      }
+      expect(sawCollecting, isTrue, reason: 'pasa por la fase de recogida');
+      expect(c.roundPhase, RoundCollectPhase.none);
+      expect(
+        c.collectedRounds,
+        c.view!.table.where((r) => r.result != null).length,
+      );
+      c.dispose();
+    },
+  );
+
+  testWidgets('una mano nueva empieza con la mesa limpia', (
+    WidgetTester tester,
+  ) async {
+    final c = OfflineGameController(
+      botDelayMs: 1,
+      roundShowMs: 100,
+      roundCollectMs: 50,
+    );
+    c.perform(const FoldAction());
+    c.startNextHand();
+    expect(c.collectedRounds, 0);
+    expect(c.roundPhase, RoundCollectPhase.none);
+    expect(c.view!.table, isEmpty);
     c.dispose();
   });
 }

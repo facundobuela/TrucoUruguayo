@@ -3,6 +3,18 @@ import 'package:truco_core/truco_core.dart';
 
 import 'speech_bubbles.dart';
 
+/// Fase de la animación con la que se recogen al mazo las cartas de una ronda.
+enum RoundCollectPhase {
+  /// No hay cartas esperando ser recogidas.
+  none,
+
+  /// Ronda recién resuelta: se ven las dos cartas y quién ganó.
+  showing,
+
+  /// Las cartas viajan al mazo.
+  collecting,
+}
+
 /// Contrato entre la pantalla de juego y quien la alimenta.
 ///
 /// Hoy lo implementa `OfflineGameController` (motor local + bot). Para el modo
@@ -30,6 +42,17 @@ abstract class GameController extends ChangeNotifier {
 
   /// Globo de texto que se está mostrando (null si no hay).
   BubbleMsg? get activeBubble;
+
+  /// Fase de recogida de la última ronda resuelta. Mientras no sea
+  /// [RoundCollectPhase.none] nadie puede jugar: la mesa se está despejando.
+  RoundCollectPhase get roundPhase;
+
+  /// Cantidad de rondas de la mano en curso que ya se recogieron al mazo y no
+  /// deben dibujarse más sobre la mesa.
+  int get collectedRounds;
+
+  /// Duración de la animación con la que las cartas viajan al mazo.
+  Duration get roundCollectDuration;
 
   /// Realiza una acción del jugador local. Devuelve `null` si se aplicó, o un
   /// mensaje de error legible si no era reglamentaria.

@@ -12,12 +12,17 @@ class PlayerHand extends StatelessWidget {
     required this.cardW,
     required this.cardH,
     required this.onPlay,
+    this.enabled = true,
   });
 
   final HandView? view;
   final double cardW;
   final double cardH;
   final void Function(TrucoCard card) onPlay;
+
+  /// Si es `false` (no es tu turno, o se están recogiendo las cartas) ninguna
+  /// carta se resalta ni se puede tocar.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +40,7 @@ class PlayerHand extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: cards.map((c) {
-          final canPlay = legalActions.contains(PlayCardAction(c));
+          final canPlay = enabled && legalActions.contains(PlayCardAction(c));
           final role = sample?.classify(c);
 
           return GestureDetector(
