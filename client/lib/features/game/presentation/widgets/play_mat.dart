@@ -27,6 +27,7 @@ class PlayMat extends StatelessWidget {
     this.collectedRounds = 0,
     this.roundPhase = RoundCollectPhase.none,
     this.collectDuration = const Duration(milliseconds: 400),
+    this.playerThrowDx = 0,
   });
 
   final HandView? view;
@@ -45,6 +46,10 @@ class PlayMat extends StatelessWidget {
   /// Fase de la recogida de la última ronda resuelta.
   final RoundCollectPhase roundPhase;
   final Duration collectDuration;
+
+  /// Desplazamiento horizontal, respecto del centro, de la carta que acabás de
+  /// tocar en tu mano: desde ahí sale volando hacia la mesa.
+  final double playerThrowDx;
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +102,22 @@ class PlayMat extends StatelessWidget {
         final tableCenter = Offset(matW / 2, bandH + (matH - bandH) / 2);
         final collectOffset = deckPileCenter - tableCenter;
 
+        // Desde dónde llegan las cartas tiradas: la mano del rival (arriba) y
+        // tu mano (debajo del tapete, detrás de la botonera).
+        final cardHalfStep = (tableCardH + cardGap) / 2;
+        final topCardCenterY = tableCenter.dy - cardHalfStep;
+        final bottomCardCenterY = tableCenter.dy + cardHalfStep;
+        final botHandCenterY = bandPadTop + botCardH / 2 + 10;
+        final playerHandCenterY = matH + 110;
+        final botThrowFrom = Offset(0, botHandCenterY - topCardCenterY);
+        final playerThrowFrom = Offset(
+          playerThrowDx,
+          playerHandCenterY - bottomCardCenterY,
+        );
+
         return Stack(
+          // Sin recorte: la carta que tirás sale desde debajo del tapete.
+          clipBehavior: Clip.none,
           children: [
             // El repartidor queda del lado opuesto al mano; mover juntos mazo y
             // muestra mantiene visible la carta en el lado desde donde reparte.
@@ -150,6 +170,8 @@ class PlayMat extends StatelessWidget {
                   phase: roundPhase,
                   collectOffset: collectOffset,
                   collectDuration: collectDuration,
+                  botThrowFrom: botThrowFrom,
+                  playerThrowFrom: playerThrowFrom,
                 ),
               ),
             ),

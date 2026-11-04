@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:truco_core/truco_core.dart';
 import 'package:truco_client/features/game/controller/game_controller.dart';
 
+import 'playing_card.dart';
+import 'thrown_card.dart';
+
 /// Mesa: muestra SOLO la ronda en juego (carta del rival arriba y la tuya
 /// abajo). Cuando la ronda se resuelve, las cartas se ven un momento y luego
 /// viajan al mazo, de modo que nunca se acumulan sobre el tapete.
@@ -15,6 +18,8 @@ class TableRounds extends StatelessWidget {
     this.phase = RoundCollectPhase.none,
     this.collectOffset = Offset.zero,
     this.collectDuration = const Duration(milliseconds: 400),
+    this.botThrowFrom = Offset.zero,
+    this.playerThrowFrom = Offset.zero,
   });
 
   final HandView? view;
@@ -31,6 +36,11 @@ class TableRounds extends StatelessWidget {
   /// cartas al ser recogidas.
   final Offset collectOffset;
   final Duration collectDuration;
+
+  /// Desde dónde llega la carta que tira el rival / la que tirás vos,
+  /// relativo a su lugar en la mesa (mano del rival arriba, tu mano abajo).
+  final Offset botThrowFrom;
+  final Offset playerThrowFrom;
 
   @override
   Widget build(BuildContext context) {
@@ -55,26 +65,28 @@ class TableRounds extends StatelessWidget {
         cardW: cardW,
         cardH: cardH,
         cardGap: 8,
+        botFrom: botThrowFrom,
+        playerFrom: playerThrowFrom,
       ),
     );
 
-    if (phase == RoundCollectPhase.collecting) {
-      content = TweenAnimationBuilder<double>(
-        key: ValueKey('collect-$collectedRounds'),
-        tween: Tween<double>(begin: 0, end: 1),
-        duration: collectDuration,
-        curve: Curves.easeInCubic,
-        builder: (context, t, child) => Transform.translate(
-          offset: collectOffset * t,
-          child: Transform.scale(
-            scale: 1 - 0.65 * t,
-            child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
-          ),
+    // La estructura del árbol es siempre la misma (también fuera de la fase de
+    // recogida) para que las cartas ya tiradas no vuelvan a animarse: sólo
+    // cambia el valor de la animación (0 = en su lugar, 1 = ya en el mazo).
+    final collecting = phase == RoundCollectPhase.collecting;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: collecting ? 1 : 0),
+      duration: collecting ? collectDuration : Duration.zero,
+      curve: Curves.easeInCubic,
+      builder: (context, t, child) => Transform.translate(
+        offset: collectOffset * t,
+        child: Transform.scale(
+          scale: 1 - 0.65 * t,
+          child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
         ),
-        child: content,
-      );
-    }
-    return content;
+      ),
+      child: content,
+    );
   }
 }
 
@@ -85,6 +97,8 @@ class _RoundColumn extends StatelessWidget {
     required this.cardW,
     required this.cardH,
     required this.cardGap,
+    required this.botFrom,
+    required this.playerFrom,
   });
 
   final PlayedRound r;
@@ -92,6 +106,13 @@ class _RoundColumn extends StatelessWidget {
   final double cardW;
   final double cardH;
   final double cardGap;
+  final Offset botFrom;
+  final Offset playerFrom;
+
+  /// Inclinación inicial de la carta al tirarla: leve y distinta según la
+  /// carta, para que no todas lleguen igual (determinista: sin azar).
+  double _angleFor(TrucoCard c, double base) =>
+      ((c.number + c.suit.index) % 2 == 0 ? 1 : -1) * base;
 
   @override
   Widget build(BuildContext context) {
@@ -118,12 +139,19 @@ class _RoundColumn extends StatelessWidget {
       children: [
         // Carta del Bot (arriba, descubierta)
         if (r.cardOf(me.other) != null)
-          _TableCard(
-            card: r.cardOf(me.other)!,
-            width: cardW,
-            height: cardH,
-            isWinner: botWon,
-            isParda: isParda,
+          ThrownCard(
+            key: ValueKey('bot-${r.cardOf(me.other)!.id}'),
+            from: botFrom,
+            fromAngle: _angleFor(r.cardOf(me.other)!, 0.28),
+            duration: const Duration(milliseconds: 460),
+            back: CardBack(width: cardW, height: cardH),
+            child: _TableCard(
+              card: r.cardOf(me.other)!,
+              width: cardW,
+              height: cardH,
+              isWinner: botWon,
+              isParda: isParda,
+            ),
           )
         else
           SizedBox(width: cardW, height: cardH),
@@ -132,12 +160,17 @@ class _RoundColumn extends StatelessWidget {
 
         // Carta del Jugador (abajo)
         if (r.cardOf(me) != null)
-          _TableCard(
-            card: r.cardOf(me)!,
-            width: cardW,
-            height: cardH,
-            isWinner: playerWon,
-            isParda: isParda,
+          ThrownCard(
+            key: ValueKey('me-${r.cardOf(me)!.id}'),
+            from: playerFrom,
+            fromAngle: _angleFor(r.cardOf(me)!, 0.22),
+            child: _TableCard(
+              card: r.cardOf(me)!,
+              width: cardW,
+              height: cardH,
+              isWinner: playerWon,
+              isParda: isParda,
+            ),
           )
         else
           SizedBox(width: cardW, height: cardH),

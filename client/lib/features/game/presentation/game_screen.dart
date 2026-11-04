@@ -118,6 +118,9 @@ class _GameScreenState extends State<GameScreen> {
                         matchWinner: _controller.matchWinner,
                         onNextHand: _controller.startNextHand,
                         onNewMatch: _controller.startNewMatch,
+                        collectedRounds: _controller.collectedRounds,
+                        roundPhase: _controller.roundPhase,
+                        collectDuration: _controller.roundCollectDuration,
                       ),
                     ),
 
@@ -135,6 +138,7 @@ class _GameScreenState extends State<GameScreen> {
                       cardW: playerCardW,
                       cardH: playerCardH,
                       onPlay: (card) => _perform(PlayCardAction(card)),
+                      enabled: isPlayerTurn,
                     ),
                   ],
                 );
