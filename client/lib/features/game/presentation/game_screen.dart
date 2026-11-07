@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:truco_core/truco_core.dart';
+import 'package:truco_client/features/game/audio/game_audio.dart';
 import 'package:truco_client/features/game/controller/game_controller.dart';
 import 'package:truco_client/features/game/controller/offline_game_controller.dart';
 
@@ -16,9 +17,13 @@ import 'widgets/status_bar.dart';
 /// Si no se le pasa un [controller] crea (y libera) un
 /// `OfflineGameController`: partida local contra el bot.
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, this.controller});
+  const GameScreen({super.key, this.controller, this.audio});
 
   final GameController? controller;
+
+  /// Audio para el controlador que se crea por defecto (se ignora si se pasa
+  /// un [controller]). Sin audio la partida es muda.
+  final GameAudio? audio;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -32,7 +37,8 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ?? OfflineGameController();
+    _controller =
+        widget.controller ?? OfflineGameController(audio: widget.audio);
   }
 
   @override
@@ -72,6 +78,15 @@ class _GameScreenState extends State<GameScreen> {
             backgroundColor: const Color(0xFF0F241A),
             elevation: 2,
             actions: [
+              IconButton(
+                icon: Icon(
+                  _controller.soundEnabled ? Icons.volume_up : Icons.volume_off,
+                ),
+                tooltip: _controller.soundEnabled
+                    ? 'Silenciar sonido'
+                    : 'Activar sonido',
+                onPressed: _controller.toggleSound,
+              ),
               IconButton(
                 icon: const Icon(Icons.refresh),
                 tooltip: 'Reiniciar partida',
@@ -118,9 +133,6 @@ class _GameScreenState extends State<GameScreen> {
                         matchWinner: _controller.matchWinner,
                         onNextHand: _controller.startNextHand,
                         onNewMatch: _controller.startNewMatch,
-                        collectedRounds: _controller.collectedRounds,
-                        roundPhase: _controller.roundPhase,
-                        collectDuration: _controller.roundCollectDuration,
                       ),
                     ),
 
@@ -138,7 +150,6 @@ class _GameScreenState extends State<GameScreen> {
                       cardW: playerCardW,
                       cardH: playerCardH,
                       onPlay: (card) => _perform(PlayCardAction(card)),
-                      enabled: isPlayerTurn,
                     ),
                   ],
                 );

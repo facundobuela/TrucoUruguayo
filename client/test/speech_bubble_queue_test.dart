@@ -51,4 +51,31 @@ void main() {
     expect(q.active, isNull, reason: 'no debe reaparecer nada tras clear');
     q.dispose();
   });
+
+  testWidgets('el globo dura al menos lo que dura su voz', (
+    WidgetTester tester,
+  ) async {
+    final q = SpeechBubbleQueue(onChanged: () {});
+    q.say(Seat.b, 'Tengo 28', voice: 'tengo_28', minDurationMs: 2500);
+    expect(q.active!.durationMs, 2500);
+    expect(q.active!.voice, 'tengo_28');
+    q.dispose();
+  });
+
+  testWidgets('onShow avisa cuando cada globo pasa a mostrarse, en orden', (
+    WidgetTester tester,
+  ) async {
+    final shown = <String>[];
+    final q = SpeechBubbleQueue(
+      onChanged: () {},
+      onShow: (m) => shown.add(m.voice ?? '-'),
+    );
+    q.say(Seat.a, '¡Truco!', voice: 'truco');
+    q.say(Seat.b, '¡Quiero!', voice: 'quiero');
+    expect(shown, ['truco']);
+
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(shown, ['truco', 'quiero']);
+    q.dispose();
+  });
 }

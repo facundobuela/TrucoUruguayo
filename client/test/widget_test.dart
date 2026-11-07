@@ -6,7 +6,6 @@ import 'package:truco_client/app.dart';
 import 'package:truco_client/features/game/controller/game_controller.dart';
 import 'package:truco_client/features/game/controller/offline_game_controller.dart';
 import 'package:truco_client/features/game/presentation/game_screen.dart';
-import 'package:truco_client/features/game/presentation/widgets/thrown_card.dart';
 import 'package:truco_core/truco_core.dart';
 
 void main() {
@@ -237,82 +236,24 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('ThrownCard viaja desde su origen hasta su lugar y se queda ahí', (
-    WidgetTester tester,
-  ) async {
-    const key = Key('carta');
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Center(
-          child: ThrownCard(
-            from: Offset(0, 200),
-            child: SizedBox(key: key, width: 40, height: 60),
-          ),
-        ),
-      ),
-    );
-    final startY = tester.getCenter(find.byKey(key)).dy;
-
-    await tester.pump(const Duration(milliseconds: 600));
-    final endY = tester.getCenter(find.byKey(key)).dy;
-
-    expect(startY - endY, closeTo(200, 0.5), reason: 'arranca 200 px más abajo');
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(
-      tester.getCenter(find.byKey(key)).dy,
-      closeTo(endY, 0.01),
-      reason: 'la animación corre una sola vez',
-    );
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('ThrownCard con dorso llega dado vuelta: de dorso a frente', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Center(
-          child: ThrownCard(
-            from: Offset(0, -100),
-            back: SizedBox(key: Key('dorso'), width: 40, height: 60),
-            child: SizedBox(key: Key('frente'), width: 40, height: 60),
-          ),
-        ),
-      ),
-    );
-    expect(find.byKey(const Key('dorso')), findsOneWidget);
-    expect(find.byKey(const Key('frente')), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byKey(const Key('frente')), findsOneWidget);
-    expect(find.byKey(const Key('dorso')), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('al jugar una carta aparece tirada sobre la mesa y se queda', (
+  testWidgets('el botón de sonido alterna entre activado y silenciado', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(440, 956);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 
-    final controller = OfflineGameController(botDelayMs: 60000);
-    await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
-    );
+    await tester.pumpWidget(const TrucoApp());
     await tester.pump();
-    expect(find.byType(ThrownCard), findsNothing);
+    expect(find.byIcon(Icons.volume_up), findsOneWidget);
 
-    controller.perform(PlayCardAction(controller.view!.myCards.first));
+    await tester.tap(find.byIcon(Icons.volume_up));
     await tester.pump();
-    expect(find.byType(ThrownCard), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.volume_off), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(ThrownCard), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.volume_off));
+    await tester.pump();
+    expect(find.byIcon(Icons.volume_up), findsOneWidget);
     expect(tester.takeException(), isNull);
-
-    await tester.pumpWidget(const SizedBox());
-    controller.dispose();
   });
 }

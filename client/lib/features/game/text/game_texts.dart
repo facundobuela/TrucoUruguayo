@@ -122,19 +122,31 @@ class GameTexts {
     }
   }
 
+  /// Variantes de cada respuesta (las repetidas pesan más al elegir al azar).
+  static const List<String> quieroPhrases = [
+    '¡Quiero!',
+    '¡Quiero!',
+    '¡Quiero, dale!',
+  ];
+  static const List<String> noQuieroPhrases = [
+    'No quiero',
+    'No quiero',
+    'No, no quiero',
+  ];
+  static const List<String> foldPhrases = ['Me voy al mazo', 'Al mazo'];
+
   static String responsePhrase(BetResponse r, Random rng) {
     switch (r) {
       case BetResponse.quiero:
-        return _pick(rng, ['¡Quiero!', '¡Quiero!', '¡Quiero, dale!']);
+        return _pick(rng, quieroPhrases);
       case BetResponse.noQuiero:
-        return _pick(rng, ['No quiero', 'No quiero', 'No, no quiero']);
+        return _pick(rng, noQuieroPhrases);
       case BetResponse.conFlorMeAchico:
         return 'Con flor me achico';
     }
   }
 
-  static String foldPhrase(Random rng) =>
-      _pick(rng, ['Me voy al mazo', 'Al mazo']);
+  static String foldPhrase(Random rng) => _pick(rng, foldPhrases);
 
   static String _pick(Random rng, List<String> options) =>
       options[rng.nextInt(options.length)];

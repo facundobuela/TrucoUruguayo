@@ -3,6 +3,8 @@ import 'dart:math';
 
 import 'package:truco_core/truco_core.dart';
 
+import '../audio/game_audio.dart';
+import '../audio/game_voices.dart';
 import '../text/game_texts.dart';
 import 'game_controller.dart';
 import 'speech_bubbles.dart';
@@ -17,9 +19,11 @@ class OfflineGameController extends GameController {
     this.botDelayMs = 900,
     this.roundShowMs = 900,
     this.roundCollectMs = 400,
-  }) : _bot = bot ?? HeuristicBot(),
+    GameAudio? audio,
+  }) : _audio = audio ?? SilentGameAudio(),
+       _bot = bot ?? HeuristicBot(),
        _matchFactory = matchFactory ?? (() => TrucoMatch()) {
-    _bubbles = SpeechBubbleQueue(onChanged: _notify);
+    _bubbles = SpeechBubbleQueue(onChanged: _notify, onShow: _onBubbleShown);
     startNewMatch();
   }
 
@@ -33,6 +37,8 @@ class OfflineGameController extends GameController {
   final int roundCollectMs;
 
   final HeuristicBot _bot;
+  final GameAudio _audio;
+  final List<Timer> _sfxTimers = [];
   final TrucoMatch Function() _matchFactory;
   final Random _rng = Random();
   late final SpeechBubbleQueue _bubbles;
@@ -96,6 +102,15 @@ class OfflineGameController extends GameController {
   @override
   Duration get roundCollectDuration => Duration(milliseconds: roundCollectMs);
 
+  @override
+  bool get soundEnabled => !_audio.muted;
+
+  @override
+  void toggleSound() {
+    _audio.muted = !_audio.muted;
+    _notify();
+  }
+
   // ---------------------------------------------------------------------------
   // Ciclo de la partida
   // ---------------------------------------------------------------------------
@@ -146,6 +161,7 @@ class OfflineGameController extends GameController {
     _disposed = true;
     _botTimer?.cancel();
     _collectTimer?.cancel();
+    _cancelSfx();
     _bubbles.dispose();
     super.dispose();
   }
@@ -160,6 +176,7 @@ class OfflineGameController extends GameController {
     _botTimer = null;
     _collectTimer?.cancel();
     _collectTimer = null;
+    _cancelSfx();
     _roundPhase = RoundCollectPhase.none;
     _collectedRounds = 0;
     _bubbles.clear();
@@ -246,6 +263,7 @@ class OfflineGameController extends GameController {
     _collectTimer = Timer(Duration(milliseconds: roundShowMs), () {
       if (_disposed) return;
       _roundPhase = RoundCollectPhase.collecting;
+      _audio.playSfx(GameSfx.cardsToDeck); // las cartas vuelven al mazo
       _notify();
       _collectTimer = Timer(Duration(milliseconds: roundCollectMs), () {
         if (_disposed) return;
@@ -257,12 +275,55 @@ class OfflineGameController extends GameController {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Sonido
+  // ---------------------------------------------------------------------------
+
+  /// Dice [text] con globo de texto y, si tiene, con su voz. La duración del
+  /// globo no baja de lo que dura el audio (más un pequeño margen).
+  void _say(Seat seat, String text) {
+    final voice = GameVoices.keyFor(text);
+    final voiceMs = voice == null ? 0 : (GameVoices.durationMs(voice) ?? 0);
+    _bubbles.say(
+      seat,
+      text,
+      voice: voice,
+      minDurationMs: voiceMs == 0 ? 0 : voiceMs + 250,
+    );
+  }
+
+  /// Suena la voz de un globo en el momento en que aparece.
+  void _onBubbleShown(BubbleMsg msg) {
+    final voice = msg.voice;
+    if (voice != null) _audio.playVoice(voice, fromPlayer: msg.seat == _me);
+  }
+
+  /// Programa un efecto para dentro de [ms] (p. ej. cuando la carta aterriza).
+  void _sfxAfter(int ms, GameSfx sfx) {
+    late final Timer timer;
+    timer = Timer(Duration(milliseconds: ms), () {
+      _sfxTimers.remove(timer);
+      if (!_disposed) _audio.playSfx(sfx);
+    });
+    _sfxTimers.add(timer);
+  }
+
+  void _cancelSfx() {
+    for (final t in _sfxTimers) {
+      t.cancel();
+    }
+    _sfxTimers.clear();
+  }
+
   /// Traduce los eventos de la jugada en globos de texto.
   void _announceEvents(List<GameEvent> events, Seat actor, GameAction action) {
     final hand = _match.hand;
     for (final e in events) {
-      if (e is BetCalledEvent) {
-        _bubbles.say(
+      if (e is CardPlayedEvent) {
+        // Suena cuando la carta aterriza (el rival tarda más: se da vuelta).
+        _sfxAfter(e.seat == _me ? 300 : 400, GameSfx.cardPlace);
+      } else if (e is BetCalledEvent) {
+        _say(
           e.seat,
           GameTexts.callPhrase(
             e.bet,
@@ -270,23 +331,24 @@ class OfflineGameController extends GameController {
           ),
         );
       } else if (e is BetRespondedEvent) {
-        _bubbles.say(e.seat, GameTexts.responsePhrase(e.response, _rng));
+        _say(e.seat, GameTexts.responsePhrase(e.response, _rng));
       } else if (e is EnvidoResolvedEvent && hand != null) {
         // El mano canta su tanto; el pie lo iguala/supera o dice "son buenas".
-        _bubbles.say(hand.mano, 'Tengo ${e.manoPoints}');
-        _bubbles.say(
+        _say(hand.mano, 'Tengo ${e.manoPoints}');
+        _say(
           hand.mano.other,
           e.piePoints == null ? 'Son buenas' : 'Tengo ${e.piePoints}',
         );
       } else if (e is FlorComparedEvent && hand != null) {
         final manoScore = hand.mano == Seat.a ? e.scoreA : e.scoreB;
         final pieScore = hand.mano == Seat.a ? e.scoreB : e.scoreA;
-        _bubbles.say(hand.mano, 'Flor de $manoScore');
-        _bubbles.say(hand.mano.other, 'Flor de $pieScore');
+        _say(hand.mano, 'Flor de $manoScore');
+        _say(hand.mano.other, 'Flor de $pieScore');
       }
     }
     if (action is FoldAction) {
-      _bubbles.say(actor, GameTexts.foldPhrase(_rng));
+      _audio.playSfx(GameSfx.cardsToDeck); // las cartas vuelven al mazo
+      _say(actor, GameTexts.foldPhrase(_rng));
     }
   }
 

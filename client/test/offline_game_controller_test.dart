@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:truco_client/features/game/audio/game_audio.dart';
 import 'package:truco_client/features/game/controller/game_controller.dart';
 import 'package:truco_client/features/game/controller/offline_game_controller.dart';
 import 'package:truco_core/truco_core.dart';
+
+import 'helpers/recording_game_audio.dart';
 
 void main() {
   testWidgets('arranca una partida con la mano 1 repartida', (
@@ -195,5 +198,97 @@ void main() {
     expect(c.roundPhase, RoundCollectPhase.none);
     expect(c.view!.table, isEmpty);
     c.dispose();
+  });
+
+  group('Sonido', () {
+    testWidgets('la carta suena cuando aterriza sobre la mesa', (
+      WidgetTester tester,
+    ) async {
+      final audio = RecordingGameAudio();
+      final c = OfflineGameController(botDelayMs: 60000, audio: audio);
+
+      c.perform(PlayCardAction(c.view!.myCards.first));
+      expect(audio.sfx, isEmpty, reason: 'todavía está en el aire');
+
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(audio.sfx, [GameSfx.cardPlace]);
+      c.dispose();
+    });
+
+    testWidgets('cantar truco dice "¡Truco!" con tu voz', (
+      WidgetTester tester,
+    ) async {
+      final audio = RecordingGameAudio();
+      final c = OfflineGameController(botDelayMs: 60000, audio: audio);
+
+      c.perform(const CallAction(BetCall.truco));
+      expect(audio.voices, ['truco']);
+      expect(audio.voiceFromPlayer, [true]);
+      c.dispose();
+    });
+
+    testWidgets('irse al mazo suena a cartas que vuelven al mazo y lo dice', (
+      WidgetTester tester,
+    ) async {
+      final audio = RecordingGameAudio();
+      final c = OfflineGameController(botDelayMs: 60000, audio: audio);
+
+      c.perform(const FoldAction());
+      expect(audio.sfx, contains(GameSfx.cardsToDeck));
+      expect(audio.voices.single, anyOf('me_voy_al_mazo', 'al_mazo'));
+      c.dispose();
+    });
+
+    testWidgets('al silenciar no suena nada y al reactivar vuelve a sonar', (
+      WidgetTester tester,
+    ) async {
+      final audio = RecordingGameAudio();
+      final c = OfflineGameController(botDelayMs: 60000, audio: audio);
+      expect(c.soundEnabled, isTrue);
+
+      c.toggleSound();
+      expect(c.soundEnabled, isFalse);
+      c.perform(const CallAction(BetCall.truco));
+      expect(audio.voices, isEmpty);
+
+      c.toggleSound();
+      expect(c.soundEnabled, isTrue);
+      c.dispose();
+    });
+
+    testWidgets('al recogerse la ronda suena el efecto del mazo', (
+      WidgetTester tester,
+    ) async {
+      final audio = RecordingGameAudio();
+      final c = OfflineGameController(
+        botDelayMs: 1,
+        roundShowMs: 100,
+        roundCollectMs: 50,
+        audio: audio,
+      );
+
+      for (var i = 0; i < 600 && c.roundPhase == RoundCollectPhase.none; i++) {
+        if (c.isPlayerTurn) {
+          final legal = c.view!.legalActions;
+          c.perform(
+            legal.contains(const RespondAction(BetResponse.quiero))
+                ? const RespondAction(BetResponse.quiero)
+                : legal.firstWhere(
+                    (a) => a is PlayCardAction,
+                    orElse: () => legal.first,
+                  ),
+          );
+        }
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(audio.sfx, isNot(contains(GameSfx.cardsToDeck)),
+          reason: 'recién se ve la ronda');
+
+      for (var i = 0; i < 100 && c.roundPhase != RoundCollectPhase.none; i++) {
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      expect(audio.sfx, contains(GameSfx.cardsToDeck));
+      c.dispose();
+    });
   });
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'features/game/audio/audioplayers_game_audio.dart';
 
 void main() {
-  runApp(const TrucoApp());
+  runApp(TrucoApp(audio: AudioPlayersGameAudio()));
 }

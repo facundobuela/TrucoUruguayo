@@ -54,6 +54,12 @@ abstract class GameController extends ChangeNotifier {
   /// Duración de la animación con la que las cartas viajan al mazo.
   Duration get roundCollectDuration;
 
+  /// `true` si el sonido (efectos y voces) está activado.
+  bool get soundEnabled;
+
+  /// Activa o silencia el sonido.
+  void toggleSound();
+
   /// Realiza una acción del jugador local. Devuelve `null` si se aplicó, o un
   /// mensaje de error legible si no era reglamentaria.
   String? perform(GameAction action);

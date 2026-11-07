@@ -36,6 +36,13 @@ Reglas del módulo: los widgets leen **`HandView`** (nunca `TrucoHand`) y el mod
 online se agrega como un nuevo `GameController` sin tocar los widgets. El estado
 se resuelve hoy con `ChangeNotifier`; migrar a `flutter_bloc` sólo afecta a `controller/`.
 
+## Sonido
+Efectos (carta que cae, cartas al mazo) y voces de cantos/respuestas/tantos, con el
+paquete `audioplayers`. La lógica no depende del plugin: `GameAudio` (Dart puro) es el
+contrato, `AudioPlayersGameAudio` la implementación real y `SilentGameAudio` la muda
+(tests). El botón de volumen de la barra superior silencia todo. Detalles, claves de
+voz y licencias en `assets/audio/README.md`; generador en `tools/generate_audio.py`.
+
 ## Dependencias Clave
 - `truco_core`: Referencia local al paquete `../core` (motor de reglas único).
 - `web_socket_channel`: Comunicación WSS en tiempo real.

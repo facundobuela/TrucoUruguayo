@@ -37,6 +37,9 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Efectos de sonido y voces de la partida.
+  audioplayers: ^6.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -60,6 +63,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/cards/
+    - assets/audio/sfx/
+    - assets/audio/voice/player/
+    - assets/audio/voice/rival/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
