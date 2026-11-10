@@ -14,6 +14,7 @@ export 'src/game/view.dart';
 export 'src/bot/heuristic_bot.dart';
 export 'src/protocol/messages.dart';
 export 'src/models/suit.dart';
+export 'src/ranking/elo.dart';
 export 'src/models/card.dart';
 export 'src/models/sample.dart';
 export 'src/models/seat.dart';

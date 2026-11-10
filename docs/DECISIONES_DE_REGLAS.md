@@ -34,3 +34,21 @@ es un cambio local en `core/lib/src/game/hand.dart` o `rules/`.
 - Se agregó la respuesta `CON_FLOR_ME_ACHICO` y los cantos `CONTRAFLOR`, `REAL_ENVIDO`, `FALTA_ENVIDO`, `VALE_CUATRO`.
 - Se usan `playerId` = `a` | `b`; el servidor deberá mapear usuarios a asiento.
 - Mensajes nuevos de lobby y revelación de semilla: ver `Protocol` en `core/lib/src/protocol/messages.dart`.
+
+## Elo (partidas clasificatorias)
+
+Implementado en `core/lib/src/ranking/elo.dart` (compartido por cliente y servidor).
+El SRS pide Elo (RF-02, RF-12, RF-19) pero no fija números: **todo esto es una propuesta
+pendiente de validar**.
+
+| # | Regla | Decisión implementada | Estado |
+|---|-------|----------------------|--------|
+| E1 | Puntaje inicial | 1000 | [VERIFICAR] |
+| E2 | Factor K | 32; **48 durante las primeras 10 partidas** (jugador nuevo) | [VERIFICAR] |
+| E3 | Piso | Nadie baja de 100 | [VERIFICAR] |
+| E4 | Probabilidad esperada | Fórmula Elo estándar (400 puntos = 10 a 1) | estándar |
+| E5 | Equipos (2v2, 3v3) | Se usa el promedio del equipo contra el del rival; cada integrante se mueve con su propio K | [VERIFICAR] |
+| E6 | Qué partidas suman | Sólo clasificatorias contra personas. Las de Bot **no** (RF-02) | SRS |
+| E7 | Cuenta | Las clasificatorias exigen cuenta registrada (RF-01) | SRS |
+| E8 | Quién lo aplica | Siempre el servidor autoritativo; el cliente sólo lo usa para anticipar "+X / −Y" | decisión técnica |
+| E9 | Ligas / temporadas | No implementadas (RF-19) | pendiente |

@@ -1,28 +1,46 @@
 import 'package:flutter/material.dart';
 
 import 'features/game/audio/game_audio.dart';
-import 'features/game/presentation/game_screen.dart';
+import 'features/menu/main_menu_screen.dart';
+import 'features/modes/game_session_factory.dart';
+import 'features/ranked/ranked_service.dart';
 
-/// Aplicación raíz: tema oscuro verde paño y pantalla de juego.
+/// Aplicación raíz: tema oscuro verde paño y menú principal.
 ///
-/// [audio] es el sonido de la partida; si no se indica, la partida es muda
-/// (así funcionan los tests, que no tienen plugins de audio).
+/// - [audio]: sonido de las partidas; sin él las partidas son mudas (así
+///   funcionan los tests, que no tienen plugins de audio).
+/// - [sessionFactory]: cómo se arma la partida de cada modo.
+/// - [rankedService]: partidas clasificatorias (hoy no disponible).
 class TrucoApp extends StatelessWidget {
-  const TrucoApp({super.key, this.audio});
+  const TrucoApp({
+    super.key,
+    this.audio,
+    this.sessionFactory,
+    this.rankedService,
+  });
 
   final GameAudio? audio;
+  final GameSessionFactory? sessionFactory;
+  final RankedService? rankedService;
+
+  /// Tema de toda la app (también lo usan los tests de la pantalla de juego).
+  static ThemeData get theme => ThemeData(
+    brightness: Brightness.dark,
+    primarySwatch: Colors.green,
+    fontFamily: 'sans-serif',
+  );
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Truco Uruguayo',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.green,
-        fontFamily: 'sans-serif',
+      theme: theme,
+      home: MainMenuScreen(
+        sessionFactory:
+            sessionFactory ?? DefaultGameSessionFactory(audio: audio),
+        rankedService: rankedService ?? const UnavailableRankedService(),
       ),
-      home: GameScreen(audio: audio),
     );
   }
 }

@@ -28,6 +28,7 @@ class PlayMat extends StatelessWidget {
     this.roundPhase = RoundCollectPhase.none,
     this.collectDuration = const Duration(milliseconds: 400),
     this.playerThrowDx = 0,
+    this.onExitToMenu,
   });
 
   final HandView? view;
@@ -50,6 +51,9 @@ class PlayMat extends StatelessWidget {
   /// Desplazamiento horizontal, respecto del centro, de la carta que acabás de
   /// tocar en tu mano: desde ahí sale volando hacia la mesa.
   final double playerThrowDx;
+
+  /// Si no es null, al terminar la partida se ofrece "Volver al menú".
+  final VoidCallback? onExitToMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -258,6 +262,13 @@ class PlayMat extends StatelessWidget {
                             ),
                           ),
                         ),
+                        if (isMatchOver && onExitToMenu != null) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: onExitToMenu,
+                            child: const Text('Volver al menú'),
+                          ),
+                        ],
                       ],
                     ),
                   ),

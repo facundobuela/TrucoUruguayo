@@ -36,6 +36,20 @@ Reglas del módulo: los widgets leen **`HandView`** (nunca `TrucoHand`) y el mod
 online se agrega como un nuevo `GameController` sin tocar los widgets. El estado
 se resuelve hoy con `ChangeNotifier`; migrar a `flutter_bloc` sólo afecta a `controller/`.
 
+## Menú y modos de juego
+```
+lib/features/
+├── menu/       main_menu_screen.dart (Jugar / Partidas Elo), play_modes_screen.dart, widgets/
+├── modes/      game_mode.dart (catálogo de modos), game_session_factory.dart (modo -> GameController)
+└── ranked/     ranked_service.dart (contrato de Elo; hoy "no disponible"), ranked_screen.dart
+```
+- **Agregar un modo**: definirlo en `GameModes` y resolverlo en `DefaultGameSessionFactory.create`.
+  Un modo con `availability: comingSoon` aparece en el menú como "Próximamente".
+- **Partidas Elo**: cuando exista el servidor, implementar `RankedService` (perfil + búsqueda
+  de mesa) y pasarlo a `TrucoApp(rankedService: ...)`; la pantalla no cambia. El cálculo
+  de Elo vive en `truco_core` (`Elo`).
+- Las partidas contra el Bot nunca suman Elo (RF-02): `GameMode.countsForElo`.
+
 ## Sonido
 Efectos (carta que cae, cartas al mazo) y voces de cantos/respuestas/tantos, con el
 paquete `audioplayers`. La lógica no depende del plugin: `GameAudio` (Dart puro) es el
